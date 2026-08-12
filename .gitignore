@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Claude Code 세션
+.claude/
+
+# 원본 대용량 데이터 (27MB) — 배포에는 data/*.json 만 필요하다.
+# 재생성: scripts/build_data.py
+seoul-apt-latest.csv
+
+# 국토부 API 원본 수집 결과 (scripts/fetch_molit.py) — 마찬가지로 배포엔 불필요,
+# 재생성: scripts/fetch_molit.py (resume 지원되므로 재수집 시 처음부터 다시 받지 않음)
+data/raw/
+
+# API 인증키 — 절대 커밋하지 말 것
+.env
+secrets.json
+
+# 작업 중 파일
+indext.html
+__pycache__/
+*.pyc
