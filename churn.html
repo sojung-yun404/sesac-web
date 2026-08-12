@@ -95,19 +95,6 @@
   section { margin-top: var(--sp-48); }
   .section-note { color: var(--color-text-muted); font-size: 0.93em; margin: 0 0 var(--sp-20); }
 
-  .banner {
-    display: flex; gap: var(--sp-12); align-items: flex-start;
-    background: #FFF9E6;
-    border: 1px solid #F5DFA0;
-    border-radius: var(--radius-md);
-    padding: var(--sp-14) var(--sp-16);
-    margin: var(--sp-20) 0 0;
-    font-size: 0.9em;
-    line-height: 1.55;
-  }
-  .banner strong { color: #7A5A00; }
-  .banner-icon { flex-shrink: 0; font-size: 1.1em; line-height: 1.4; }
-
   .card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -384,18 +371,6 @@
     <p class="lede">
       누가 이탈할지, 왜 이탈하는지, 캠페인 예산을 어디에 쓸지를 한 화면에서 결정합니다.
     </p>
-    <div class="banner">
-      <span class="banner-icon" aria-hidden="true">⚠️</span>
-      <div>
-        <strong>합성 데이터입니다.</strong>
-        실제 서비스 지표가 아닙니다.
-        <a href="https://www.kaggle.com/code/chriskue/sparkify-user-churn-prediction" target="_blank" rel="noopener">Sparkify 원본 데이터셋</a>의
-        통계적 구조(이탈률 23.1%, 관측 기간, 드라이버 중요도)를 보존한 채 5,000명 규모로 재생성했습니다.
-        원본 mini 데이터셋은 고유 사용자가 225명뿐이라 세그먼트 분석에 표본이 부족합니다.
-        생성 방식은 <a href="docs/PRD-churn.md">PRD §6</a>, 재현 코드는
-        <a href="scripts/build_churn_data.py">build_churn_data.py</a>를 참고하세요.
-      </div>
-    </div>
   </header>
 
   <div class="kpi-grid" id="kpis"></div>
@@ -688,7 +663,12 @@
   </section>
 
   <footer>
-    <p><strong>데이터</strong> — 합성 데이터(시드 42, 5,000명). 실제 서비스 지표가 아닙니다.</p>
+    <p><strong>데이터</strong> — 합성 데이터입니다. 실제 서비스 지표가 아닙니다.
+      <a href="https://www.kaggle.com/code/chriskue/sparkify-user-churn-prediction" target="_blank" rel="noopener">Sparkify 원본 데이터셋</a>의
+      통계적 구조(이탈률 23.1%, 관측 기간, 드라이버 중요도)를 보존한 채 5,000명 규모로 재생성했습니다.
+      원본 mini 데이터셋은 고유 사용자가 225명뿐이라 세그먼트 분석에 표본이 부족합니다.
+      생성 방식은 <a href="docs/PRD-churn.md">PRD §6</a>, 재현 코드는
+      <a href="scripts/build_churn_data.py">build_churn_data.py</a>(시드 42)를 참고하세요.</p>
     <p><strong>원본</strong> —
       <a href="https://www.kaggle.com/code/chriskue/sparkify-user-churn-prediction" target="_blank" rel="noopener">Sparkify User Churn Prediction</a>
       (Udacity Data Scientist Nanodegree Capstone, Apache 2.0)</p>
@@ -1040,10 +1020,11 @@
         <div class="kpi-value">${pct(k.soft_churn_rate)}</div>
         <div class="kpi-sub">유료 ${int(k.paid_users)}명 중 ${int(k.soft_churn_users)}명</div>
       </div>
-      <div class="kpi is-alert">
-        <div class="kpi-label">후반기 해지 변화</div>
+      <div class="kpi ${Math.abs(d) >= 0.15 ? "is-alert" : ""}">
+        <div class="kpi-label">후반기 해지율 변화</div>
         <div class="kpi-value"><span class="delta ${dir}">${arrow} ${pct(Math.abs(d))}</span></div>
-        <div class="kpi-sub">${int(k.prev_churn)} → ${int(k.recent_churn)}명</div>
+        <div class="kpi-sub">${pct(k.prev_churn_rate)} → ${pct(k.recent_churn_rate)}
+          <span class="muted">(기간 내 활동 사용자 대비)</span></div>
       </div>
       <div class="kpi">
         <div class="kpi-label">고위험 잔존군</div>

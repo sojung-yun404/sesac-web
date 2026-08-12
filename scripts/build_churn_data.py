@@ -56,6 +56,10 @@ MIN_SONGS_FOR_RATIO = 50
 
 # 리텐션 감쇠 시상수(주). 가입 직후 접속 확률이 바닥값으로 내려앉는 속도.
 RETENTION_TAU_WEEKS = 2.5
+
+# 이탈 위험률의 평균 재적일수. 창 안에서 가입한 사용자의 해지 시점을
+# 가입 후 경과일 기준 지수분포로 뽑을 때 쓴다.
+CHURN_MEAN_TENURE_DAYS = 24
 PAID_RATE = 0.36           # 노트북 In[24]: 유료가 소수
 MONTHLY_FEE = 10900        # 원 (PRD §5 F6 가정)
 
@@ -235,16 +239,27 @@ def assign_outcomes(users, rng, shift):
         else:
             u["downgrade"] = 0
 
-        # 이탈 시점은 반드시 가입일 이후여야 한다.
-        # 창 전체에서 균등 추출하면 늦게 가입한 사용자의 해지일이 가입일보다
-        # 앞서는 경우가 생기고, 그 사용자는 가입 주에만 활동한 것으로 집계돼
-        # 코호트 표에서 최근 코호트의 W1이 무너진다.
-        first_day = max(0, (u["registration"] - WINDOW_START).days)
-        span = WINDOW_DAYS - 1 - first_day
+        # 이탈 시점은 위험률(hazard)을 따른다. 가입 직후가 가장 위험하고
+        # 시간이 지날수록 잦아든다 — 원본 노트북의 "이탈자 절반이 50일 안에
+        # 이탈한다"는 관찰과 같은 구조다.
+        #
+        # 시점을 창 안에서 임의로 뽑으면 가입일 제약과 겹쳐 후반부에 근거 없이
+        # 몰리고, "해지 3배 급증" 같은 가짜 신호가 KPI에 뜬다.
+        reg_offset = (u["registration"] - WINDOW_START).days   # 음수면 창 이전 가입
+        first_day = max(0, reg_offset)
+        last_day = WINDOW_DAYS - 1
 
         if u["churn"]:
-            # 후반부에 약간 몰리도록 지수를 준다
-            u["churn_day"] = first_day + int(span * (rng.random() ** 0.85)) if span > 0 else first_day
+            if reg_offset >= 0:
+                # 창 안에서 가입 → 가입 후 경과일을 지수분포로 뽑는다
+                tenure_at_churn = rng.expovariate(1.0 / CHURN_MEAN_TENURE_DAYS)
+                day = reg_offset + int(tenure_at_churn)
+                # 창을 넘어가면 아직 관측되지 않은 것이므로 창 안으로 되돌린다
+                u["churn_day"] = min(day, last_day) if day >= first_day else first_day
+            else:
+                # 창 이전 가입자는 이미 초기 위험 구간을 넘긴 생존자다.
+                # 남은 위험률은 완만하므로 창 안에서 균등하게 본다.
+                u["churn_day"] = rng.randint(first_day, last_day)
         else:
             u["churn_day"] = None
 
@@ -621,10 +636,25 @@ def build_summary(users, model):
     high_risk = [u for u in users if u["risk_score"] >= model["threshold"] and u["churn"] == 0]
     high_risk_paid = [u for u in high_risk if u["is_paid"]]
 
-    # 직전 기간 대비: 관측 기간을 반으로 나눠 비교
+    # 전·후반기 비교는 반드시 '비율'로 한다.
+    # 원시 해지 건수를 비교하면 모수 증가를 보정하지 못해 급증으로 오독된다.
+    # 특히 신규 가입이 계속 들어오는 구간에서는 후반기 건수가 구조적으로 크다.
     half = WINDOW_DAYS // 2
-    recent_churn = sum(1 for u in users if u["churn_day"] is not None and u["churn_day"] >= half)
-    prev_churn = sum(1 for u in users if u["churn_day"] is not None and u["churn_day"] < half)
+
+    def half_window(lo, hi):
+        return ((1 << (hi + 1)) - 1) ^ ((1 << lo) - 1)
+
+    w1, w2 = half_window(0, half - 1), half_window(half, WINDOW_DAYS - 1)
+
+    def period_rate(wmask, lo, hi):
+        # 분모: 그 기간에 한 번이라도 활동한 사용자 (= 이탈할 수 있었던 모수)
+        base = sum(1 for u in users if u["active_mask"] & wmask)
+        churned = sum(1 for u in users
+                      if u["churn_day"] is not None and lo <= u["churn_day"] <= hi)
+        return base, churned, (churned / base if base else 0.0)
+
+    prev_base, prev_churn, prev_rate = period_rate(w1, 0, half - 1)
+    recent_base, recent_churn, recent_rate = period_rate(w2, half, WINDOW_DAYS - 1)
 
     kpis = {
         "total_users": total,
@@ -638,7 +668,11 @@ def build_summary(users, model):
         "at_risk_mrr": len(high_risk_paid) * MONTHLY_FEE,
         "recent_churn": recent_churn,
         "prev_churn": prev_churn,
-        "churn_delta": round((recent_churn - prev_churn) / prev_churn, 4) if prev_churn else 0.0,
+        "recent_churn_rate": round(recent_rate, 4),
+        "prev_churn_rate": round(prev_rate, 4),
+        "recent_base": recent_base,
+        "prev_base": prev_base,
+        "churn_delta": round((recent_rate - prev_rate) / prev_rate, 4) if prev_rate else 0.0,
         "retained_users": len(retained),
     }
 
