@@ -53,6 +53,9 @@ TENURE_TYPE_MAX_DAYS = 90   # 30~90: 정착 실패 / 이상: 재적 기간은 �
 # 비율 지표(Thumbs Down·광고 노출)의 분모 하한. 이보다 적게 들은 사용자는
 # 비율이 0에 붙어버려 "추천이 만족스러움"과 "거의 안 들음"이 구분되지 않는다.
 MIN_SONGS_FOR_RATIO = 50
+
+# 리텐션 감쇠 시상수(주). 가입 직후 접속 확률이 바닥값으로 내려앉는 속도.
+RETENTION_TAU_WEEKS = 2.5
 PAID_RATE = 0.36           # 노트북 In[24]: 유료가 소수
 MONTHLY_FEE = 10900        # 원 (PRD §5 F6 가정)
 
@@ -195,6 +198,7 @@ def build_base_users(rng):
             "os": os_name,
             "state": state,
             "z": z,
+            "tenure_risk": tenure_risk,
             "taste_mismatch": taste_mismatch,
             "sociality": sociality,
             "intensity": intensity,
@@ -231,16 +235,22 @@ def assign_outcomes(users, rng, shift):
         else:
             u["downgrade"] = 0
 
-        # 이탈 시점: 관측 기간 내 균등하되 후반부에 약간 몰림
+        # 이탈 시점은 반드시 가입일 이후여야 한다.
+        # 창 전체에서 균등 추출하면 늦게 가입한 사용자의 해지일이 가입일보다
+        # 앞서는 경우가 생기고, 그 사용자는 가입 주에만 활동한 것으로 집계돼
+        # 코호트 표에서 최근 코호트의 W1이 무너진다.
+        first_day = max(0, (u["registration"] - WINDOW_START).days)
+        span = WINDOW_DAYS - 1 - first_day
+
         if u["churn"]:
-            offset = int(WINDOW_DAYS * (rng.random() ** 0.85))
-            u["churn_day"] = min(offset, WINDOW_DAYS - 1)
+            # 후반부에 약간 몰리도록 지수를 준다
+            u["churn_day"] = first_day + int(span * (rng.random() ** 0.85)) if span > 0 else first_day
         else:
             u["churn_day"] = None
 
         if u["downgrade"]:
             limit = u["churn_day"] if u["churn_day"] is not None else WINDOW_DAYS - 1
-            u["downgrade_day"] = rng.randint(0, max(limit, 0))
+            u["downgrade_day"] = rng.randint(first_day, limit) if limit >= first_day else first_day
         else:
             u["downgrade_day"] = None
 
@@ -255,22 +265,46 @@ def build_behavior(users, rng):
         u["active_from"] = active_from
         u["active_to"] = active_to
 
-        # 세션 빈도: 청취 강도가 높을수록 잦음
-        base_freq = clamp(0.42 + 0.20 * u["intensity"] - 0.10 * max(u["z"], 0), 0.04, 0.95)
+        # 세션 빈도의 기준선도 가입 시점을 뺀 내재 위험으로 잡는다.
+        # 여기에 재적 기간이 섞이면 늦게 가입했다는 이유만으로 기준선이 낮아져,
+        # 감쇠를 분리해 둔 의미가 사라진다. 가입 시점의 영향은 아래 decay가 맡는다.
+        z_intrinsic = u["z"] - W_TENURE * u["tenure_risk"]
+        base_freq = clamp(0.42 + 0.20 * u["intensity"] - 0.10 * max(z_intrinsic, 0), 0.04, 0.95)
         u["session_freq"] = base_freq
 
         # 접속일을 실제로 추출한다. 빈도의 합만으로는 DAU밖에 못 만들고,
         # WAU/MAU는 "기간 내 고유 사용자"라 접속일 자체가 있어야 계산된다.
         # 비트마스크로 담아 롤링 윈도우를 빠르게 훑는다.
+        # 접속 확률은 가입 후 경과 주차에 따라 감쇠한다.
+        # 이걸 넣지 않으면 위험도가 '관측 종료일 기준 재적일수'에만 걸려,
+        # 늦게 가입한 사용자는 가입 직후부터 영구히 활동이 낮게 나온다.
+        # 그러면 코호트 표에서 최근 코호트가 W1부터 무너지는 것처럼 보이는데,
+        # 이는 획득 품질 신호가 아니라 생성 방식의 부산물이다.
+        # 바닥값은 '가입 시점을 뺀' 내재 위험으로만 정한다.
+        # 재적 기간까지 넣으면 늦게 가입했다는 이유만으로 감쇠가 빨라져,
+        # 코호트를 같은 주차끼리 비교해도 최근 코호트가 나쁘게 보인다.
+        # 리텐션 곡선의 모양은 취향·소셜·청취 강도가 결정하고,
+        # 가입 시점은 '지금 며칠 됐는가'로만 위험에 반영되는 게 맞다.
+        floor = clamp(0.78 - 0.55 * sigmoid(z_intrinsic), 0.12, 0.88)
+        reg_day = (u["registration"] - WINDOW_START).days   # 음수면 창 이전 가입
+
         mask = 0
         hits = 0
         for d in range(active_from, active_to + 1):
             weekday = (WINDOW_START + timedelta(days=d)).weekday()
             season = 1.18 if weekday >= 4 else 0.94   # 금~일 활동 증가
-            if rng.random() < min(0.98, base_freq * season):
+            weeks_since = max(0, (d - reg_day)) / 7.0
+            decay = floor + (1 - floor) * math.exp(-weeks_since / RETENTION_TAU_WEEKS)
+            if rng.random() < clamp(base_freq * season * decay, 0.01, 0.98):
                 mask |= (1 << d)
                 hits += 1
-        if hits == 0:   # 최소 하루는 접속한 것으로 둔다
+        # 관측 창 안에서 가입했다면 가입일은 접속한 것으로 본다.
+        # 가입 행위 자체가 사용이고, 코호트 표의 W0가 100%가 되는 표준 규약과도 맞다.
+        # 창 이전 가입자에게 적용하면 창 첫날에 3천여 명이 몰려 DAU가 튄다.
+        if u["registration"] >= WINDOW_START and not (mask & (1 << active_from)):
+            mask |= (1 << active_from)
+            hits += 1
+        elif hits == 0:   # 최소 하루는 접속한 것으로 둔다
             mask |= (1 << active_from)
             hits = 1
         u["active_mask"] = mask
@@ -475,6 +509,69 @@ def build_daily_series(users):
     }
 
 
+def build_cohort_matrix(users):
+    """주간 리텐션 코호트 (삼각 행렬).
+
+    행 = 가입 주, 열 = 가입 후 경과 주차, 셀 = 그 주에 한 번이라도 접속한 비율.
+
+    가입 월별 이탈률을 그냥 나열하면 최근 코호트일수록 재적 기간이 짧아 이탈률이
+    높게 나온다 — 획득 품질이 나빠진 것처럼 보이지만 실제로는 관측 기간의 차이다.
+    코호트를 '가입 후 같은 주차'끼리 비교하면 그 편향이 사라진다. 그게 이 표의 요점.
+
+    관측 창(64일) 안에서 가입한 사용자만 대상으로 한다. 창 이전 가입자는
+    초기 몇 주의 활동 기록이 아예 없어 W0·W1을 계산할 수 없다.
+    """
+    full_weeks = WINDOW_DAYS // 7   # 온전히 관측된 주 수 (부분 주는 값이 낮게 나와 제외)
+
+    cohorts = {}
+    for u in users:
+        if u["registration"] < WINDOW_START:
+            continue
+        reg_day = (u["registration"] - WINDOW_START).days
+        wk = reg_day // 7
+        if wk >= full_weeks:
+            continue
+        cohorts.setdefault(wk, []).append(u)
+
+    rows = []
+    for wk in sorted(cohorts):
+        members = cohorts[wk]
+        size = len(members)
+        cells = []
+        for k in range(full_weeks - wk):
+            lo = (wk + k) * 7
+            hi = lo + 6
+            wmask = ((1 << (hi + 1)) - 1) ^ ((1 << lo) - 1)
+            active = sum(1 for u in members if u["active_mask"] & wmask)
+            cells.append({
+                "week": k,
+                "rate": round(active / size, 4),
+                "users": active,
+            })
+        start = WINDOW_START + timedelta(days=wk * 7)
+        rows.append({
+            "cohort": start.isoformat(),
+            "label": start.strftime("%m/%d"),
+            "size": size,
+            "low_sample": size < 100,
+            "cells": cells,
+        })
+
+    # 주차별 평균 리텐션 (코호트 크기 가중) — 표 하단 요약행
+    avg = []
+    for k in range(full_weeks):
+        num = sum(c["cells"][k]["users"] for c in rows if len(c["cells"]) > k)
+        den = sum(c["size"] for c in rows if len(c["cells"]) > k)
+        if den:
+            avg.append({"week": k, "rate": round(num / den, 4), "cohorts": sum(1 for c in rows if len(c["cells"]) > k)})
+    return {
+        "weeks": full_weeks,
+        "rows": rows,
+        "average": avg,
+        "note": "관측 창 안에서 가입한 사용자만. 부분 주는 값이 낮게 나오므로 제외했다.",
+    }
+
+
 def build_engagement_series(users):
     """DAU / WAU / MAU와 고착도(DAU÷MAU).
 
@@ -669,6 +766,7 @@ def build_summary(users, model):
         "kpis": kpis,
         "daily": build_daily_series(users),
         "engagement": build_engagement_series(users),
+        "cohort_matrix": build_cohort_matrix(users),
         "baseline_churn_rate": kpis["hard_churn_rate"],
         "drivers": drivers,
         "segments": segments,

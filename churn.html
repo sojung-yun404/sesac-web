@@ -278,6 +278,37 @@
     padding: var(--sp-16);
   }
 
+  /* ── Cohort retention heatmap ─────────────────────────────────────
+     순차 램프(파랑 단일 색상, 명도 단조). 각 셀에 값을 직접 찍으므로
+     색은 패턴을 빠르게 훑기 위한 보조 채널이고, 값 자체는 항상 텍스트로 읽힌다. */
+  .cohort-table { border-collapse: separate; border-spacing: 2px; width: auto; min-width: 100%; }
+  .cohort-table th, .cohort-table td { border: none; padding: 0; white-space: nowrap; }
+  .cohort-table thead th {
+    background: transparent; color: var(--color-text-muted);
+    font-size: 0.72em; font-weight: 600; letter-spacing: 0.02em;
+    text-align: center; padding: 0 0 var(--sp-6);
+    text-transform: none; position: static;
+  }
+  .cohort-table th.rowhead {
+    text-align: left; padding-right: var(--sp-10);
+    font-size: 0.8em; font-weight: 600;
+    color: var(--color-text); background: transparent;
+  }
+  .cohort-table th.rowhead .size { display: block; font-weight: 400; font-size: 0.85em; color: var(--color-text-muted); }
+  .cohort-table td.cell {
+    width: 52px; height: 34px; text-align: center;
+    font-size: 0.78em; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    border-radius: var(--radius-sm);
+  }
+  .cohort-table td.empty { background: transparent; }
+  .cohort-table tr.avg td.cell { outline: 1px solid var(--color-border); outline-offset: -1px; }
+  .cohort-table tr.avg th.rowhead { color: var(--color-text-muted); }
+  .cohort-table tr.low th.rowhead::after { content: " ⚠"; color: var(--color-text-muted); }
+
+  .heat-legend { display: flex; align-items: center; gap: var(--sp-6); font-size: 0.78em; color: var(--color-text-muted); }
+  .heat-legend .sw { width: 22px; height: 12px; border-radius: 3px; }
+
   /* ── Recommendation banner ───────────────────────────────────────── */
   .reco {
     background: var(--color-primary-tint);
@@ -451,18 +482,25 @@
     <div class="card" style="margin-top:var(--sp-16)">
       <div class="chart-head">
         <div>
-          <h3>가입 코호트별 이탈률</h3>
-          <div class="small muted">가입 월은 시간 축이므로 구간 비교(막대)가 아니라 추세(선)로 그렸습니다</div>
+          <h3>주간 리텐션 코호트</h3>
+          <div class="small muted">
+            행 = 가입 주, 열 = 가입 후 경과 주차, 셀 = 그 주에 한 번이라도 접속한 비율
+          </div>
         </div>
-        <div class="legend">
-          <button class="btn-ghost" type="button" data-toggle="tv-cohort">표로 보기</button>
-        </div>
+        <div class="heat-legend" id="heat-legend"></div>
       </div>
-      <div class="chart-wrap" id="chart-cohort"></div>
-      <div class="table-view" id="tv-cohort"></div>
-      <p class="small muted" style="margin:var(--sp-12) 0 0">
-        최근 코호트일수록 이탈률이 높은 것은 <b>획득 품질 저하가 아니라 재적 기간이 짧기 때문</b>입니다.
-        위 "가입 기간" 카드와 같은 현상을 다른 축에서 본 것이니 함께 읽으세요.
+      <div class="table-scroll">
+        <table class="cohort-table" id="cohort-table"></table>
+      </div>
+      <p class="small muted" style="margin:var(--sp-14) 0 0">
+        <b>왜 이렇게 보나.</b> 가입 월별 이탈률을 그냥 나열하면 최근 코호트일수록
+        재적 기간이 짧아 이탈률이 높게 나옵니다 — 획득 품질이 나빠진 것처럼 보이지만
+        실제로는 관측 기간의 차이입니다. <b>같은 주차끼리 세로로 비교</b>하면 그 편향이 사라집니다.
+        W0은 가입 주라 정의상 100%이고, 실제로 봐야 할 것은 <b>W1에서 얼마나 떨어지는가</b>입니다.
+      </p>
+      <p class="small muted" style="margin:var(--sp-8) 0 0">
+        관측 창(64일) 안에서 가입한 사용자만 대상입니다. 창 이전 가입자는 초기 몇 주의
+        활동 기록이 없어 W0·W1을 계산할 수 없습니다. 부분 주도 값이 낮게 나오므로 제외했습니다.
       </p>
     </div>
   </section>
@@ -1096,22 +1134,53 @@
     });
   }
 
+  // 리텐션 히트맵 램프 — 파랑 단일 색상, 명도 단조 감소.
+  // 각 단계의 글자색은 4.5:1 이상이 나오는 쪽으로 고정했다.
+  const HEAT = [
+    { max: 0.20, bg: "#cde2fb", fg: "#111214" },
+    { max: 0.35, bg: "#9ec5f4", fg: "#111214" },
+    { max: 0.50, bg: "#6da7ec", fg: "#111214" },
+    { max: 0.65, bg: "#3987e5", fg: "#111214" },
+    { max: 0.80, bg: "#256abf", fg: "#FFFFFF" },
+    { max: 0.95, bg: "#1c5cab", fg: "#FFFFFF" },
+    { max: 1.01, bg: "#104281", fg: "#FFFFFF" },
+  ];
+  const heatOf = (rate) => HEAT.find((h) => rate < h.max) || HEAT[HEAT.length - 1];
+
   function renderCohorts() {
-    const c = SUMMARY.cohorts;
-    // 코호트는 시간 축이다 — 구간 비교가 아니라 추세이므로 선으로 그린다.
-    const host = el("chart-cohort");
-    const cfg = {
-      labels: c.map((r) => r.month.slice(2)),
-      tipLabels: c.map((r) => r.month + " 가입"),
-      height: 220,
-      aria: "가입 코호트별 이탈률 추이",
-      series: [{ name: "이탈률", color: "var(--series-1)", values: c.map((r) => r.rate) }],
-      fmt: (v) => pct(v),
-      yFmt: (v) => (v * 100).toFixed(0) + "%",
+    const m = SUMMARY.cohort_matrix;
+    const weeks = m.weeks;
+
+    el("heat-legend").innerHTML =
+      `<span>낮음</span>` +
+      HEAT.map((h) => `<span class="sw" style="background:${h.bg}"></span>`).join("") +
+      `<span>높음</span>`;
+
+    const cell = (c) => {
+      const h = heatOf(c.rate);
+      return `<td class="cell" style="background:${h.bg};color:${h.fg}"
+                  title="W${c.week} · ${pct(c.rate)} · ${int(c.users)}명">${(c.rate * 100).toFixed(0)}%</td>`;
     };
-    register(host, () => lineChart(host, cfg));
-    tableView(el("tv-cohort"), ["가입 월", "사용자", "이탈", "이탈률"],
-      c.map((r) => [r.month, int(r.users), int(r.churned), pct(r.rate)]));
+
+    const head = `<thead><tr><th class="rowhead">가입 주</th>` +
+      Array.from({ length: weeks }, (_, k) => `<th>W${k}</th>`).join("") + `</tr></thead>`;
+
+    const body = m.rows.map((r) => {
+      const cells = r.cells.map(cell).join("") +
+        `<td class="empty" colspan="${weeks - r.cells.length}"></td>`.repeat(weeks - r.cells.length ? 1 : 0);
+      return `<tr class="${r.low_sample ? "low" : ""}">` +
+        `<th class="rowhead">${esc(r.label)}<span class="size">${int(r.size)}명</span></th>` +
+        cells + `</tr>`;
+    }).join("");
+
+    const avg = `<tr class="avg"><th class="rowhead">주차 평균<span class="size">가중</span></th>` +
+      m.average.map((a) => {
+        const h = heatOf(a.rate);
+        return `<td class="cell" style="background:${h.bg};color:${h.fg}"
+                    title="W${a.week} 평균 · ${pct(a.rate)} · 코호트 ${a.cohorts}개">${(a.rate * 100).toFixed(0)}%</td>`;
+      }).join("") + `</tr>`;
+
+    el("cohort-table").innerHTML = head + `<tbody>${body}${avg}</tbody>`;
   }
 
   function renderEngagement() {
