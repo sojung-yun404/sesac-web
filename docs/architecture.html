@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sesac-web 구조 — 데이터가 웹사이트가 되기까지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5f5f5;
+    --paper-2: #ececec;
+    --ink: #2d3142;
+    --muted: #4f5d75;
+    --soft: #7a8399;
+    --rule: rgba(45, 49, 66, 0.12);
+    --accent: #eb6c36;
+
+    --sans: 'Geist', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    --mono: 'Geist Mono', 'Apple SD Gothic Neo', 'Noto Sans KR', monospace;
+    --serif: 'Instrument Serif', 'Apple SD Gothic Neo', serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 4rem 2rem;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+
+  .wrap { max-width: 1040px; margin: 0 auto; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--soft);
+    margin: 0 0 0.75rem;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: 1.75rem;
+    font-weight: 400;
+    line-height: 1.2;
+    margin: 0 0 0.75rem;
+  }
+
+  .subtitle {
+    font-size: 0.95rem;
+    color: var(--muted);
+    margin: 0 0 3rem;
+    max-width: 60ch;
+  }
+
+  .diagram { margin: 0 0 3rem; overflow-x: auto; }
+  .diagram svg { display: block; width: 100%; height: auto; min-width: 720px; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr 0.9fr;
+    gap: 2rem;
+    margin: 0 0 3rem;
+  }
+
+  .card h2 {
+    font-family: var(--serif);
+    font-size: 1.05rem;
+    font-weight: 400;
+    margin: 0 0 0.5rem;
+  }
+
+  .card p {
+    font-size: 0.875rem;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .card code {
+    font-family: var(--mono);
+    font-size: 0.8em;
+    color: var(--ink);
+  }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 1rem;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: var(--soft);
+  }
+
+  footer a { color: var(--soft); }
+
+  @media (max-width: 720px) {
+    body { padding: 2.5rem 1.25rem; }
+    .cards { grid-template-columns: 1fr; gap: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Architecture · sesac-web</p>
+  <h1>데이터가 웹사이트가 되기까지</h1>
+  <p class="subtitle">
+    국토교통부에서 아파트 실거래 데이터를 받아 정리한 뒤, 사람이 보는 화면으로 내보내기까지의
+    전체 흐름입니다. 왼쪽에서 오른쪽으로 읽으시면 됩니다.
+  </p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 960 520" role="img" aria-labelledby="arch-title arch-desc"
+         xmlns="http://www.w3.org/2000/svg">
+      <title id="arch-title">sesac-web 사이트 구조도</title>
+      <desc id="arch-desc">국토교통부 API에서 받은 데이터를 파이썬 스크립트 두 개가 수집하고 정리해 JSON 파일 두 개로 만들고, 그 파일을 GitHub Pages에 올린 대시보드 페이지가 읽어 화면을 그린다.</desc>
+
+      <defs>
+        <marker id="arch-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+        </marker>
+        <marker id="arch-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+        </marker>
+        <marker id="arch-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/>
+        </marker>
+      </defs>
+
+      <!-- background -->
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <!-- ============ zones ============ -->
+      <rect x="40" y="56" width="256" height="296" rx="8"
+            fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="136" y="60" width="64" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="168" y="69" fill="rgba(45,49,66,0.40)" font-size="7"
+            font-family="'Geist Mono','Apple SD Gothic Neo',monospace"
+            text-anchor="middle" letter-spacing="0.14em">1 · 모으기</text>
+
+      <rect x="352" y="84" width="256" height="320" rx="8"
+            fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="444" y="88" width="72" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="480" y="97" fill="rgba(45,49,66,0.40)" font-size="7"
+            font-family="'Geist Mono','Apple SD Gothic Neo',monospace"
+            text-anchor="middle" letter-spacing="0.14em">2 · 정리하기</text>
+
+      <rect x="664" y="84" width="256" height="184" rx="8"
+            fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="756" y="88" width="72" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="792" y="97" fill="rgba(45,49,66,0.40)" font-size="7"
+            font-family="'Geist Mono','Apple SD Gothic Neo',monospace"
+            text-anchor="middle" letter-spacing="0.14em">3 · 보여주기</text>
+
+      <!-- ============ arrows (before boxes) ============ -->
+
+      <!-- 1. API -> 수집 스크립트 -->
+      <line x1="168" y1="144" x2="168" y2="184" stroke="#4f5d75" stroke-width="1.2"
+            marker-end="url(#arch-arrow)"/>
+      <rect x="176" y="156" width="52" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="180" y="165" fill="#7a8399" font-size="8"
+            font-family="'Geist Mono','Apple SD Gothic Neo',monospace"
+            letter-spacing="0.06em">864회 호출</text>
+
+      <!-- 2. 수집 -> 전처리 -->
+      <line x1="168" y1="240" x2="168" y2="280" stroke="#4f5d75" stroke-width="1.2"
+            marker-end="url(#arch-arrow)"/>
+
+      <!-- 3. 전처리 -> 요약 데이터 (right + up) -->
+      <path d="M 268,296 H 316 Q 324,296 324,288 V 152 Q 324,144 332,144 H 380"
+            fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arch-arrow)"/>
+
+      <!-- 4. 전처리 -> 상세 데이터 (right + down) -->
+      <path d="M 268,320 H 332 Q 340,320 340,328 V 352 Q 340,360 348,360 H 380"
+            fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arch-arrow)"/>
+
+      <!-- 5. 요약 데이터 -> 대시보드 (accent: 첫 화면 경로) -->
+      <path d="M 580,144 H 612 Q 620,144 620,152 V 204 Q 620,212 628,212 H 692"
+            fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arch-arrow-accent)"/>
+      <rect x="628" y="172" width="32" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="644" y="181" fill="#eb6c36" font-size="8"
+            font-family="'Geist Mono','Apple SD Gothic Neo',monospace"
+            text-anchor="middle" letter-spacing="0.06em">첫 화면</text>
+
+      <!-- 6. 상세 데이터 -> 대시보드 (dashed: 필요할 때만) -->
+      <path d="M 580,360 H 648 Q 656,360 656,352 V 244 Q 656,236 664,236 H 692"
+            fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"
+            marker-end="url(#arch-arrow)"/>
+      <rect x="592" y="340" width="44" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="614" y="349" fill="#7a8399" font-size="8"
+            font-family="'Geist Mono','Apple SD Gothic Neo',monospace"
+            text-anchor="middle" letter-spacing="0.06em">지연 로드</text>
+
+      <!-- 7. 소개 페이지 -> 대시보드 -->
+      <line x1="792" y1="172" x2="792" y2="196" stroke="#4f5d75" stroke-width="1.2"
+            marker-end="url(#arch-arrow)"/>
+
+      <!-- ============ nodes ============ -->
+
+      <!-- 국토교통부 API (external) -->
+      <rect x="68" y="88" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="68" y="88" width="200" height="56" rx="6"
+            fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="76" y="96" width="28" height="12" rx="2" fill="transparent"
+            stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="90" y="105" fill="rgba(45,49,66,0.70)" font-size="7"
+            font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+      <text x="168" y="126" fill="#2d3142" font-size="12" font-weight="600"
+            font-family="'Geist','Apple SD Gothic Neo','Noto Sans KR',sans-serif"
+            text-anchor="middle">국토교통부 실거래가</text>
+      <text x="168" y="140" fill="#4f5d75" font-size="9"
+            font-family="'Geist Mono',monospace" text-anchor="middle">data.go.kr</text>
+
+      <!-- 수집 스크립트 -->
+      <rect x="68" y="184" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="68" y="184" width="200" height="56" rx="6"
+            fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="76" y="192" width="28" height="12" rx="2" fill="transparent"
+            stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="90" y="201" fill="rgba(45,49,66,0.80)" font-size="7"
+            font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">PY</text>
+      <text x="168" y="222" fill="#2d3142" font-size="12" font-weight="600"
+            font-family="'Geist','Apple SD Gothic Neo','Noto Sans KR',sans-serif"
+            text-anchor="middle">수집 스크립트</text>
+      <text x="168" y="236" fill="#4f5d75" font-size="9"
+            font-family="'Geist Mono',monospace" text-anchor="middle">fetch_molit.py</text>
+
+      <!-- 전처리 스크립트 -->
+      <rect x="68" y="280" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="68" y="280" width="200" height="56" rx="6"
+            fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="76" y="288" width="28" height="12" rx="2" fill="transparent"
+            stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="90" y="297" fill="rgba(45,49,66,0.80)" font-size="7"
+            font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">PY</text>
+      <text x="168" y="318" fill="#2d3142" font-size="12" font-weight="600"
+            font-family="'Geist','Apple SD Gothic Neo','Noto Sans KR',sans-serif"
+            text-anchor="middle">전처리 스크립트</text>
+      <text x="168" y="332" fill="#4f5d75" font-size="9"
+            font-family="'Geist Mono',monospace" text-anchor="middle">build_data.py</text>
+
+      <!-- 요약 데이터 (store) -->
+      <rect x="380" y="116" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="380" y="116" width="200" height="56" rx="6"
+            fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="388" y="124" width="32" height="12" rx="2" fill="transparent"
+            stroke="rgba(79,93,117,0.40)" stroke-width="0.8"/>
+      <text x="404" y="133" fill="rgba(79,93,117,0.90)" font-size="7"
+            font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">JSON</text>
+      <text x="480" y="154" fill="#2d3142" font-size="12" font-weight="600"
+            font-family="'Geist','Apple SD Gothic Neo','Noto Sans KR',sans-serif"
+            text-anchor="middle">요약 데이터</text>
+      <text x="480" y="168" fill="#4f5d75" font-size="9"
+            font-family="'Geist Mono',monospace" text-anchor="middle">regions.json · 88KB</text>
+
+      <!-- 상세 데이터 (store) -->
+      <rect x="380" y="332" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="380" y="332" width="200" height="56" rx="6"
+            fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="388" y="340" width="32" height="12" rx="2" fill="transparent"
+            stroke="rgba(79,93,117,0.40)" stroke-width="0.8"/>
+      <text x="404" y="349" fill="rgba(79,93,117,0.90)" font-size="7"
+            font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">JSON</text>
+      <text x="480" y="370" fill="#2d3142" font-size="12" font-weight="600"
+            font-family="'Geist','Apple SD Gothic Neo','Noto Sans KR',sans-serif"
+            text-anchor="middle">상세 데이터</text>
+      <text x="480" y="384" fill="#4f5d75" font-size="9"
+            font-family="'Geist Mono',monospace" text-anchor="middle">trades-*.json · 7.6MB</text>
+
+      <!-- 소개 페이지 -->
+      <rect x="692" y="116" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="692" y="116" width="200" height="56" rx="6"
+            fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="700" y="124" width="32" height="12" rx="2" fill="transparent"
+            stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="716" y="133" fill="rgba(45,49,66,0.80)" font-size="7"
+            font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">HTML</text>
+      <text x="792" y="154" fill="#2d3142" font-size="12" font-weight="600"
+            font-family="'Geist','Apple SD Gothic Neo','Noto Sans KR',sans-serif"
+            text-anchor="middle">소개 페이지</text>
+      <text x="792" y="168" fill="#4f5d75" font-size="9"
+            font-family="'Geist Mono',monospace" text-anchor="middle">index.html</text>
+
+      <!-- 대시보드 (focal) -->
+      <rect x="692" y="196" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="692" y="196" width="200" height="56" rx="6"
+            fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <rect x="700" y="204" width="32" height="12" rx="2" fill="transparent"
+            stroke="rgba(235,108,54,0.40)" stroke-width="0.8"/>
+      <text x="716" y="213" fill="rgba(235,108,54,0.90)" font-size="7"
+            font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">HTML</text>
+      <text x="792" y="234" fill="#2d3142" font-size="12" font-weight="600"
+            font-family="'Geist','Apple SD Gothic Neo','Noto Sans KR',sans-serif"
+            text-anchor="middle">대시보드</text>
+      <text x="792" y="248" fill="#4f5d75" font-size="9"
+            font-family="'Geist Mono',monospace" text-anchor="middle">dashboard.html</text>
+
+      <!-- ============ legend ============ -->
+      <line x1="40" y1="444" x2="920" y2="444" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="460" fill="#4f5d75" font-size="8"
+            font-family="'Geist Mono',monospace" letter-spacing="0.14em">LEGEND</text>
+
+      <line x1="160" y1="456" x2="188" y2="456" stroke="#4f5d75" stroke-width="1.2"/>
+      <text x="196" y="460" fill="#7a8399" font-size="8"
+            font-family="'Geist Mono','Apple SD Gothic Neo',monospace"
+            letter-spacing="0.06em">항상 일어나는 흐름</text>
+
+      <line x1="360" y1="456" x2="388" y2="456" stroke="#4f5d75" stroke-width="1"
+            stroke-dasharray="4,3"/>
+      <text x="396" y="460" fill="#7a8399" font-size="8"
+            font-family="'Geist Mono','Apple SD Gothic Neo',monospace"
+            letter-spacing="0.06em">필요할 때만 불러옴</text>
+
+      <rect x="560" y="452" width="28" height="12" rx="2"
+            fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <text x="596" y="460" fill="#7a8399" font-size="8"
+            font-family="'Geist Mono','Apple SD Gothic Neo',monospace"
+            letter-spacing="0.06em">사람이 실제로 보는 화면</text>
+    </svg>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h2>왜 미리 계산해 두나요?</h2>
+      <p>
+        GitHub Pages에는 계산을 대신해 줄 서버가 없습니다. 파일을 그대로 내려주기만 하죠.
+        그래서 무거운 계산은 내 컴퓨터에서 파이썬으로 미리 끝내고, 그 결과만
+        <code>.json</code> 파일로 만들어 올려둡니다.
+      </p>
+    </div>
+    <div class="card">
+      <h2>왜 파일을 둘로 나눴나요?</h2>
+      <p>
+        전부 한 번에 받으면 7.6MB라 첫 화면이 느려집니다. 그래서 요약본(88KB)만 먼저 받아
+        화면을 그리고, 검색이나 세부 필터를 쓸 때 비로소 상세 데이터를 받습니다.
+      </p>
+    </div>
+    <div class="card">
+      <h2>주황색 상자가 목적지</h2>
+      <p>
+        이 모든 과정이 향하는 곳입니다. 예산을 넣으면 갈 수 있는 동네를 추려주는,
+        사람이 실제로 쓰는 화면이죠.
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    sesac-web · 국토교통부 아파트 매매 실거래가 2025-07 ~ 2026-06 · 232,136건<br>
+    다이어그램 스타일 —
+    <a href="https://github.com/cathrynlavery/diagram-design">cathrynlavery/diagram-design</a>
+  </footer>
+
+</div>
+</body>
+</html>
