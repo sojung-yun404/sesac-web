@@ -4,133 +4,301 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>윤소정</title>
+<link rel="stylesheet" as="style" crossorigin
+  href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
 <style>
+  :root {
+    /* Montage(wanteddev/montage-web) atomic color tokens */
+    --blue-10: #001536;
+    --blue-40: #0054D1;
+    --blue-50: #0066FF;
+    --blue-60: #3385FF;
+    --blue-90: #C9DEFE;
+    --blue-99: #F7FBFF;
+
+    --neutral-10: #111214;
+    --neutral-30: #3A3D42;
+    --neutral-50: #6B7078;
+    --neutral-80: #D6D9DE;
+    --neutral-90: #ECEEF1;
+    --neutral-99: #FAFBFC;
+
+    /* semantic aliases */
+    --color-primary: var(--blue-50);
+    --color-primary-strong: var(--blue-40);
+    --color-primary-soft: var(--blue-90);
+    --color-primary-tint: var(--blue-99);
+    --color-text: var(--neutral-10);
+    --color-text-muted: var(--neutral-50);
+    --color-border: var(--neutral-80);
+    --color-surface: #FFFFFF;
+    --color-surface-muted: var(--neutral-99);
+
+    /* Montage spacing scale (px) */
+    --sp-2: 2px;
+    --sp-4: 4px;
+    --sp-6: 6px;
+    --sp-8: 8px;
+    --sp-10: 10px;
+    --sp-12: 12px;
+    --sp-14: 14px;
+    --sp-16: 16px;
+    --sp-20: 20px;
+    --sp-24: 24px;
+    --sp-32: 32px;
+    --sp-40: 40px;
+    --sp-48: 48px;
+    --sp-64: 64px;
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --shadow-card: 0 1px 2px rgba(17, 18, 20, 0.04), 0 4px 16px rgba(17, 18, 20, 0.06);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
-    max-width: 700px;
-    margin: 60px auto;
-    padding: 0 20px;
-    color: #222;
+    font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
+    max-width: 760px;
+    margin: var(--sp-64) auto;
+    padding: 0 var(--sp-20);
+    color: var(--color-text);
     line-height: 1.6;
+    background: var(--color-surface);
   }
+
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--color-primary);
+    background: var(--color-primary-tint);
+    border: 1px solid var(--color-primary-soft);
+    border-radius: 999px;
+    padding: var(--sp-4) var(--sp-12);
+    margin-bottom: var(--sp-12);
+  }
+
   h1 {
-    font-size: 2.5em;
-    margin-bottom: 10px;
+    font-size: 2.4em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 var(--sp-10);
   }
+
+  h2 {
+    font-size: 1.6em;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 var(--sp-12);
+  }
+
   p {
-    font-size: 1.05em;
+    font-size: 1.02em;
+    color: var(--color-text);
   }
+
+  .lede {
+    color: var(--color-text-muted);
+  }
+
+  section {
+    margin-top: var(--sp-48);
+  }
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+  }
+
+  .stat-card {
+    background: var(--color-primary-tint);
+    border: 1px solid var(--color-primary-soft);
+    border-radius: var(--radius-md);
+    padding: var(--sp-20) var(--sp-24);
+    margin-bottom: var(--sp-24);
+  }
+
+  .stat-card p {
+    margin: 0;
+    color: var(--color-text);
+  }
+
+  .stat-card strong {
+    color: var(--color-primary-strong);
+  }
+
   table {
     border-collapse: collapse;
     width: 100%;
-    margin-top: 30px;
   }
+
   th, td {
-    border: 1px solid #ccc;
-    padding: 10px 14px;
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--sp-14) var(--sp-16);
     text-align: left;
+    font-size: 0.95em;
   }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
   th {
-    background-color: #f5f5f5;
+    background-color: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    font-weight: 600;
+    font-size: 0.82em;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  tbody tr:hover {
+    background-color: var(--color-primary-tint);
+  }
+
+  .rank {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    font-size: 0.8em;
+    font-weight: 700;
+    color: var(--color-primary);
+    background: var(--color-primary-soft);
+  }
+
+  .rank.is-top {
+    color: #FFFFFF;
+    background: var(--color-primary);
+  }
+
+  .price {
+    font-weight: 600;
+    color: var(--color-primary-strong);
   }
 </style>
 </head>
 <body>
-  <h1>윤소정</h1>
-  <p>
-    안녕하세요, 윤소정입니다. 새로운 것을 배우고 만드는 것을 좋아합니다.
-    꾸준히 성장하기 위해 매일 조금씩 노력하고 있습니다.
-  </p>
+  <header>
+    <span class="eyebrow">Profile</span>
+    <h1>윤소정</h1>
+    <p class="lede">
+      안녕하세요, 윤소정입니다. 새로운 것을 배우고 만드는 것을 좋아합니다.
+      꾸준히 성장하기 위해 매일 조금씩 노력하고 있습니다.
+    </p>
+  </header>
 
-  <table>
-    <thead>
-      <tr>
-        <th>항목</th>
-        <th>설명</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>좋아하는 것</td>
-        <td>커피와 함께하는 조용한 아침 시간</td>
-      </tr>
-      <tr>
-        <td>요즘 배우는 것</td>
-        <td>웹 개발 기초 (HTML, CSS, JavaScript)</td>
-      </tr>
-      <tr>
-        <td>오늘 목표</td>
-        <td>새로운 코드 하나 완성하기</td>
-      </tr>
-    </tbody>
-  </table>
+  <section>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>항목</th>
+            <th>설명</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>좋아하는 것</td>
+            <td>커피와 함께하는 조용한 아침 시간</td>
+          </tr>
+          <tr>
+            <td>요즘 배우는 것</td>
+            <td>웹 개발 기초 (HTML, CSS, JavaScript)</td>
+          </tr>
+          <tr>
+            <td>오늘 목표</td>
+            <td>새로운 코드 하나 완성하기</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
-  <h1>[성북구] 아파트 실거래 살펴보기</h1>
-  <p>
-    성북구 아파트 매매 평균가는 9.07억 원이며, 그중 전용 84㎡대(80~90㎡)는 평균 9.8억 원으로
-    서울 25개 구 중 중위권 수준입니다. 성북구 내 최고가 매매 아파트는 길음동 롯데캐슬클라시아로
-    21.5억 원에 거래되었습니다.
-  </p>
+  <section>
+    <span class="eyebrow">Data</span>
+    <h2>[성북구] 아파트 실거래 살펴보기</h2>
 
-  <table>
-    <thead>
-      <tr>
-        <th>순위</th>
-        <th>아파트명</th>
-        <th>동</th>
-        <th>거래가</th>
-        <th>전용면적</th>
-        <th>층</th>
-        <th>거래일</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>1</td>
-        <td>롯데캐슬클라시아</td>
-        <td>길음동</td>
-        <td>21.5억 원</td>
-        <td>112.7㎡</td>
-        <td>8층</td>
-        <td>2026-06-27</td>
-      </tr>
-      <tr>
-        <td>2</td>
-        <td>래미안길음센터피스</td>
-        <td>길음동</td>
-        <td>19.6억 원</td>
-        <td>110.2㎡</td>
-        <td>27층</td>
-        <td>2025-09-03</td>
-      </tr>
-      <tr>
-        <td>3</td>
-        <td>스타팰리스</td>
-        <td>성북동1가</td>
-        <td>19.0억 원</td>
-        <td>184.5㎡</td>
-        <td>3층</td>
-        <td>2025-07-23</td>
-      </tr>
-      <tr>
-        <td>4</td>
-        <td>동일하이빌뉴시티</td>
-        <td>하월곡동</td>
-        <td>17.7억 원</td>
-        <td>188.6㎡</td>
-        <td>25층</td>
-        <td>2026-01-21</td>
-      </tr>
-      <tr>
-        <td>5</td>
-        <td>삼선에스케이뷰</td>
-        <td>삼선동3가</td>
-        <td>17.1억 원</td>
-        <td>122.6㎡</td>
-        <td>9층</td>
-        <td>2026-05-23</td>
-      </tr>
-    </tbody>
-  </table>
+    <div class="stat-card">
+      <p>
+        성북구 아파트 <strong>매매 평균가는 9.07억 원</strong>이며, 그중 전용 84㎡대(80~90㎡)는
+        평균 <strong>9.8억 원</strong>으로 서울 25개 구 중 중위권 수준입니다. 성북구 내 최고가
+        매매 아파트는 길음동 롯데캐슬클라시아로 <strong>21.5억 원</strong>에 거래되었습니다.
+      </p>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>순위</th>
+            <th>아파트명</th>
+            <th>동</th>
+            <th>거래가</th>
+            <th>전용면적</th>
+            <th>층</th>
+            <th>거래일</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="rank is-top">1</span></td>
+            <td>롯데캐슬클라시아</td>
+            <td>길음동</td>
+            <td class="price">21.5억 원</td>
+            <td>112.7㎡</td>
+            <td>8층</td>
+            <td>2026-06-27</td>
+          </tr>
+          <tr>
+            <td><span class="rank">2</span></td>
+            <td>래미안길음센터피스</td>
+            <td>길음동</td>
+            <td class="price">19.6억 원</td>
+            <td>110.2㎡</td>
+            <td>27층</td>
+            <td>2025-09-03</td>
+          </tr>
+          <tr>
+            <td><span class="rank">3</span></td>
+            <td>스타팰리스</td>
+            <td>성북동1가</td>
+            <td class="price">19.0억 원</td>
+            <td>184.5㎡</td>
+            <td>3층</td>
+            <td>2025-07-23</td>
+          </tr>
+          <tr>
+            <td><span class="rank">4</span></td>
+            <td>동일하이빌뉴시티</td>
+            <td>하월곡동</td>
+            <td class="price">17.7억 원</td>
+            <td>188.6㎡</td>
+            <td>25층</td>
+            <td>2026-01-21</td>
+          </tr>
+          <tr>
+            <td><span class="rank">5</span></td>
+            <td>삼선에스케이뷰</td>
+            <td>삼선동3가</td>
+            <td class="price">17.1억 원</td>
+            <td>122.6㎡</td>
+            <td>9층</td>
+            <td>2026-05-23</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 </body>
 </html>
