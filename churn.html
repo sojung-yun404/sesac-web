@@ -1004,6 +1004,10 @@
     const d = k.churn_delta;
     const dir = d > 0 ? "up" : "down";
     const arrow = d > 0 ? "▲" : "▼";
+    // 옛 캐시 데이터에는 비율 필드가 없다 — NaN을 띄우느니 건수로 물러선다
+    const ratePair = (k.prev_churn_rate != null && k.recent_churn_rate != null)
+      ? `${pct(k.prev_churn_rate)} → ${pct(k.recent_churn_rate)} <span class="muted">(기간 내 활동 사용자 대비)</span>`
+      : `${int(k.prev_churn)} → ${int(k.recent_churn)}명`;
     el("kpis").innerHTML = `
       <div class="kpi">
         <div class="kpi-label">전체 사용자</div>
@@ -1023,8 +1027,7 @@
       <div class="kpi ${Math.abs(d) >= 0.15 ? "is-alert" : ""}">
         <div class="kpi-label">후반기 해지율 변화</div>
         <div class="kpi-value"><span class="delta ${dir}">${arrow} ${pct(Math.abs(d))}</span></div>
-        <div class="kpi-sub">${pct(k.prev_churn_rate)} → ${pct(k.recent_churn_rate)}
-          <span class="muted">(기간 내 활동 사용자 대비)</span></div>
+        <div class="kpi-sub">${ratePair}</div>
       </div>
       <div class="kpi">
         <div class="kpi-label">고위험 잔존군</div>
@@ -1495,7 +1498,12 @@
   });
 
   // ── boot ──────────────────────────────────────────────────────────
-  fetch("data/churn-summary.json")
+  // DATA_VERSION은 build_churn_data.py가 JSON 내용 해시로 갱신한다.
+  // 없으면 HTML만 새로 받고 JSON은 캐시된 옛 버전이 쓰여 화면이 깨진다.
+  const DATA_VERSION = "70d9cc3c7a"; // build:data-version
+  const dataUrl = (name) => `data/${name}?v=${DATA_VERSION}`;
+
+  fetch(dataUrl("churn-summary.json"))
     .then((r) => { if (!r.ok) throw new Error("summary " + r.status); return r.json(); })
     .then((s) => {
       SUMMARY = s;
@@ -1515,7 +1523,7 @@
         sel.appendChild(o);
       });
 
-      return fetch("data/churn-users.json");
+      return fetch(dataUrl("churn-users.json"));
     })
     .then((r) => { if (!r.ok) throw new Error("users " + r.status); return r.json(); })
     .then((payload) => {

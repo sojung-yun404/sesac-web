@@ -12,6 +12,7 @@
 표준 라이브러리만 사용. 시드 고정으로 재현 가능.
 """
 
+import hashlib
 import json
 import math
 import random
@@ -856,6 +857,38 @@ def build_users_payload(users):
     }
 
 
+DATA_VERSION_MARK = "// build:data-version"
+
+
+def stamp_data_version(*paths):
+    """생성한 JSON의 내용 해시를 churn.html의 DATA_VERSION에 새긴다.
+
+    GitHub Pages는 정적 파일을 캐시한다. HTML만 갱신되고 JSON은 캐시된
+    옛 버전이 쓰이면 필드가 어긋나 화면이 깨진다(실제로 NaN이 표시됐다).
+    파일명에 버전 쿼리를 붙여 데이터가 바뀌면 반드시 새로 받게 한다.
+    """
+    h = hashlib.sha256()
+    for p in paths:
+        h.update(p.read_bytes())
+    version = h.hexdigest()[:10]
+
+    html = ROOT / "churn.html"
+    if not html.exists():
+        return version
+
+    lines = html.read_text(encoding="utf-8").splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if DATA_VERSION_MARK in line:
+            indent = line[:len(line) - len(line.lstrip())]
+            lines[i] = f'{indent}const DATA_VERSION = "{version}"; {DATA_VERSION_MARK}\n'
+            html.write_text("".join(lines), encoding="utf-8")
+            print(f"data version     : {version}  (churn.html 갱신)")
+            return version
+
+    print(f"data version     : {version}  (경고: churn.html에 {DATA_VERSION_MARK} 표시가 없어 새기지 못함)")
+    return version
+
+
 def main():
     rng = random.Random(SEED)
 
@@ -886,6 +919,8 @@ def main():
     users_path.write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
     )
+
+    stamp_data_version(summary_path, users_path)
 
     k = summary["kpis"]
     print(f"users            : {k['total_users']:,}")
