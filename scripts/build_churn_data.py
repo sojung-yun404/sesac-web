@@ -49,6 +49,10 @@ MODEL_NOISE = 1.20
 # "온보딩 실패"로 분류되어 CRM 메시지가 어긋난다.
 ONBOARDING_MAX_DAYS = 30    # 미만: 온보딩 실패
 TENURE_TYPE_MAX_DAYS = 90   # 30~90: 정착 실패 / 이상: 재적 기간은 유형에서 제외
+
+# 비율 지표(Thumbs Down·광고 노출)의 분모 하한. 이보다 적게 들은 사용자는
+# 비율이 0에 붙어버려 "추천이 만족스러움"과 "거의 안 들음"이 구분되지 않는다.
+MIN_SONGS_FOR_RATIO = 50
 PAID_RATE = 0.36           # 노트북 In[24]: 유료가 소수
 MONTHLY_FEE = 10900        # 원 (PRD §5 F6 가정)
 
@@ -63,30 +67,46 @@ STATES = [
 OPERATING_SYSTEMS = ["Windows", "Mac", "iPhone", "Linux", "iPad"]
 OS_WEIGHTS = [0.50, 0.28, 0.11, 0.07, 0.04]
 
+# 위험 유형별 캠페인 정의.
+#   channel : 실제로 무엇을 보내는가
+#   cost    : 1인당 원가(원). 푸시·인앱은 발송비 수준, 인센티브·체험은 실비.
+#             실제 집행가로 바꿔 쓰라는 의미의 기본값이며 화면에서 수정 가능하다.
 RISK_TYPES = {
     "onboarding": {
         "label": "온보딩 실패",
         "action": "첫 플레이리스트 만들기 가이드 · D+3/D+7 온보딩 저니",
+        "channel": "앱 푸시 + 인앱 가이드",
+        "cost": 500,
     },
     "early_tenure": {
         "label": "정착 실패",
         "action": "습관 형성 유도 · 주간 개인화 믹스 · 청취 리마인더",
+        "channel": "주간 푸시 + 이메일",
+        "cost": 500,
     },
     "content": {
         "label": "콘텐츠 불만",
         "action": "취향 재설정 요청 · 큐레이션 재추천 · 신규 장르 제안",
+        "channel": "인앱 설문 + 재추천 배너",
+        "cost": 800,
     },
     "isolated": {
         "label": "고립형",
         "action": "친구 초대 인센티브 · 공유 플레이리스트 유도",
+        "channel": "초대 리워드 (양방 지급)",
+        "cost": 2000,
     },
     "dormant": {
         "label": "저활성",
         "action": "리인게이지먼트 푸시 · 개인화 위클리 믹스",
+        "channel": "앱 푸시 + 이메일",
+        "cost": 500,
     },
     "ad_fatigue": {
         "label": "광고 피로",
         "action": "유료 체험 프로모션 · 광고 없는 주말 티저",
+        "channel": "유료 1개월 무료 체험",
+        "cost": 10900,
     },
 }
 
@@ -239,7 +259,24 @@ def build_behavior(users, rng):
         base_freq = clamp(0.42 + 0.20 * u["intensity"] - 0.10 * max(u["z"], 0), 0.04, 0.95)
         u["session_freq"] = base_freq
 
-        num_sessions = max(1, int(round(active_days * base_freq * rng.uniform(0.75, 1.25))))
+        # 접속일을 실제로 추출한다. 빈도의 합만으로는 DAU밖에 못 만들고,
+        # WAU/MAU는 "기간 내 고유 사용자"라 접속일 자체가 있어야 계산된다.
+        # 비트마스크로 담아 롤링 윈도우를 빠르게 훑는다.
+        mask = 0
+        hits = 0
+        for d in range(active_from, active_to + 1):
+            weekday = (WINDOW_START + timedelta(days=d)).weekday()
+            season = 1.18 if weekday >= 4 else 0.94   # 금~일 활동 증가
+            if rng.random() < min(0.98, base_freq * season):
+                mask |= (1 << d)
+                hits += 1
+        if hits == 0:   # 최소 하루는 접속한 것으로 둔다
+            mask |= (1 << active_from)
+            hits = 1
+        u["active_mask"] = mask
+        u["active_day_count"] = hits
+
+        num_sessions = max(1, int(round(hits * rng.uniform(0.9, 1.5))))
         u["num_sessions"] = num_sessions
 
         # 세션당 곡 수: 원본 av_song_session 중앙값 ~50~90 수준
@@ -411,22 +448,15 @@ def quartile_buckets(users, key_fn, fmt):
 
 
 def build_daily_series(users):
-    """일별 신규 해지 / 다운그레이드 / 활성 사용자."""
+    """일별 신규 해지 / 다운그레이드."""
     churn_by_day = [0] * WINDOW_DAYS
     down_by_day = [0] * WINDOW_DAYS
-    active_by_day = [0.0] * WINDOW_DAYS
 
     for u in users:
         if u["churn_day"] is not None:
             churn_by_day[u["churn_day"]] += 1
         if u["downgrade_day"] is not None:
             down_by_day[u["downgrade_day"]] += 1
-
-        for d in range(u["active_from"], u["active_to"] + 1):
-            # 주말 가중 (금~일 활동 증가)
-            weekday = (WINDOW_START + timedelta(days=d)).weekday()
-            season = 1.18 if weekday >= 4 else 0.94
-            active_by_day[d] += u["session_freq"] * season
 
     def moving_avg(series, window=7):
         out = []
@@ -440,9 +470,46 @@ def build_daily_series(users):
         "dates": [(WINDOW_START + timedelta(days=d)).isoformat() for d in range(WINDOW_DAYS)],
         "churn": churn_by_day,
         "downgrade": down_by_day,
-        "active": [int(round(a)) for a in active_by_day],
         "churn_ma7": moving_avg(churn_by_day),
         "downgrade_ma7": moving_avg(down_by_day),
+    }
+
+
+def build_engagement_series(users):
+    """DAU / WAU / MAU와 고착도(DAU÷MAU).
+
+    셋 다 '해당 기간에 한 번이라도 접속한 고유 사용자'다. 창이 30일이므로
+    앞쪽 29일은 창이 덜 찬 상태라 값이 인위적으로 낮게 나온다.
+    그 구간을 그대로 그리면 "MAU가 급증하는 중"으로 오독되므로,
+    세 지표가 모두 온전해지는 시점부터만 내보낸다.
+    """
+    masks = [u["active_mask"] for u in users]
+    start = 29  # MAU 창(30일)이 처음으로 가득 차는 날
+
+    def window_mask(d, span):
+        lo = max(0, d - span + 1)
+        return ((1 << (d + 1)) - 1) ^ ((1 << lo) - 1)
+
+    dau, wau, mau, sticky = [], [], [], []
+    for d in range(start, WINDOW_DAYS):
+        wd, ww, wm = window_mask(d, 1), window_mask(d, 7), window_mask(d, 30)
+        a = sum(1 for m in masks if m & wd)
+        w = sum(1 for m in masks if m & ww)
+        mo = sum(1 for m in masks if m & wm)
+        dau.append(a)
+        wau.append(w)
+        mau.append(mo)
+        sticky.append(round(a / mo, 4) if mo else 0.0)
+
+    return {
+        "dates": [(WINDOW_START + timedelta(days=d)).isoformat()
+                  for d in range(start, WINDOW_DAYS)],
+        "dau": dau,
+        "wau": wau,
+        "mau": mau,
+        "stickiness": sticky,
+        "note": "DAU/WAU/MAU는 각각 1일·7일·30일 창의 고유 접속자 수. "
+                "30일 창이 가득 차는 날부터 표시한다.",
     }
 
 
@@ -478,6 +545,10 @@ def build_summary(users, model):
         "retained_users": len(retained),
     }
 
+    # 비율 지표(Thumbs Down·광고 노출)는 분모가 작으면 값이 튄다.
+    ratio_pop = [u for u in users if u["num_songs"] >= MIN_SONGS_FOR_RATIO]
+    ratio_pop_free = [u for u in ratio_pop if not u["is_paid"]]
+
     drivers = [
         {
             "key": "tenure",
@@ -491,12 +562,17 @@ def build_summary(users, model):
             ]),
         },
         {
+            # 곡 수가 적으면 Thumbs Down 비율이 0에 수렴해 하위 구간에 몰린다.
+            # 그런 사용자는 '추천이 만족스러워서'가 아니라 '거의 안 들어서' 0이고,
+            # 저활성 때문에 이탈률이 높아 구간별 비교가 U자로 왜곡된다.
+            # 비율이 의미를 갖는 최소 청취량 이상만 대상으로 한다.
             "key": "thumbs_down",
             "title": "Thumbs Down 비율",
-            "note": "추천 품질 불만이 이탈로 이어지는지 확인한다",
+            "note": f"추천 품질 불만이 이탈로 이어지는지 확인한다 "
+                    f"(비율이 의미 있는 {MIN_SONGS_FOR_RATIO}곡 이상 청취자만)",
             "rows": bucket_stats(
-                users, lambda u: u["down_rate"],
-                quartile_buckets(users, lambda u: u["down_rate"], lambda v: f"{v * 100:.1f}%"),
+                ratio_pop, lambda u: u["down_rate"],
+                quartile_buckets(ratio_pop, lambda u: u["down_rate"], lambda v: f"{v * 100:.1f}%"),
             ),
         },
         {
@@ -522,14 +598,12 @@ def build_summary(users, model):
         {
             "key": "advert",
             "title": "광고 노출 (무료 사용자)",
-            "note": "광고 피로가 이탈 요인인지 확인한다",
+            "note": f"광고 피로가 이탈 요인인지 확인한다 "
+                    f"({MIN_SONGS_FOR_RATIO}곡 이상 청취한 무료 사용자만)",
             "rows": bucket_stats(
-                [u for u in users if not u["is_paid"]],
-                lambda u: u["ad_rate"],
-                quartile_buckets(
-                    [u for u in users if not u["is_paid"]],
-                    lambda u: u["ad_rate"], lambda v: f"{v * 100:.1f}%",
-                ),
+                ratio_pop_free, lambda u: u["ad_rate"],
+                quartile_buckets(ratio_pop_free, lambda u: u["ad_rate"],
+                                 lambda v: f"{v * 100:.1f}%"),
             ),
         },
     ]
@@ -552,8 +626,14 @@ def build_summary(users, model):
             "key": key,
             "label": meta["label"],
             "action": meta["action"],
+            "channel": meta["channel"],
+            "cost": meta["cost"],
             "target_users": len(targets),
             "paid_users": sum(u["is_paid"] for u in targets),
+            # ROI 계산용: 대상자의 예측 이탈 확률 합 = 기대 이탈 인원
+            "expected_churners": round(sum(u["risk_score"] for u in targets), 1),
+            "expected_churners_paid": round(
+                sum(u["risk_score"] for u in targets if u["is_paid"]), 1),
             "expected_churn_rate": round(
                 sum(u["risk_score"] for u in targets) / len(targets), 4) if targets else 0.0,
             "flagged_hit_rate": round(
@@ -588,6 +668,8 @@ def build_summary(users, model):
         },
         "kpis": kpis,
         "daily": build_daily_series(users),
+        "engagement": build_engagement_series(users),
+        "baseline_churn_rate": kpis["hard_churn_rate"],
         "drivers": drivers,
         "segments": segments,
         "cohorts": cohort_rows,
