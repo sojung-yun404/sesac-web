@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sparkify 이탈 방어 대시보드</title>
+<link rel="stylesheet" as="style" crossorigin
+  href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
+<style>
+  :root {
+    /* Montage(wanteddev/montage-web) atomic color tokens */
+    --blue-10: #001536;
+    --blue-40: #0054D1;
+    --blue-50: #0066FF;
+    --blue-60: #3385FF;
+    --blue-90: #C9DEFE;
+    --blue-99: #F7FBFF;
+
+    --neutral-10: #111214;
+    --neutral-30: #3A3D42;
+    --neutral-50: #6B7078;
+    --neutral-80: #D6D9DE;
+    --neutral-90: #ECEEF1;
+    --neutral-99: #FAFBFC;
+
+    --color-primary: var(--blue-50);
+    --color-primary-strong: var(--blue-40);
+    --color-primary-soft: var(--blue-90);
+    --color-primary-tint: var(--blue-99);
+    --color-text: var(--neutral-10);
+    --color-text-muted: var(--neutral-50);
+    --color-border: var(--neutral-80);
+    --color-surface: #FFFFFF;
+    --color-surface-muted: var(--neutral-99);
+
+    --sp-2: 2px;  --sp-4: 4px;  --sp-6: 6px;  --sp-8: 8px;
+    --sp-10: 10px; --sp-12: 12px; --sp-14: 14px; --sp-16: 16px;
+    --sp-20: 20px; --sp-24: 24px; --sp-32: 32px; --sp-40: 40px;
+    --sp-48: 48px; --sp-64: 64px;
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --shadow-card: 0 1px 2px rgba(17, 18, 20, 0.04), 0 4px 16px rgba(17, 18, 20, 0.06);
+
+    /* ── Data-viz slots ───────────────────────────────────────────────
+       Categorical slot 1 is the Montage brand blue; slot 2 is the
+       reference palette's orange. Validated on the #FFFFFF chart surface:
+       CVD ΔE 31.2 (protan), normal-vision ΔE 40.6, both marks >= 3:1.  */
+    --series-1: #0066FF;   /* 해지 (Hard Churn) */
+    --series-2: #eb6834;   /* 다운그레이드 (Soft Churn) */
+
+    /* Status palette — reserved for state, never for a series */
+    --status-good: #0ca30c;
+    --status-warning: #fab219;
+    --status-critical: #d03b3b;
+
+    /* Chart chrome */
+    --grid-line: #ECEEF1;
+    --axis-line: #D6D9DE;
+    --ink-muted: #898781;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
+    max-width: 1080px;
+    margin: var(--sp-48) auto;
+    padding: 0 var(--sp-20);
+    color: var(--color-text);
+    line-height: 1.6;
+    background: var(--color-surface);
+  }
+
+  a { color: var(--color-primary-strong); }
+
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.8em; font-weight: 600; letter-spacing: 0.02em;
+    color: var(--color-primary);
+    background: var(--color-primary-tint);
+    border: 1px solid var(--color-primary-soft);
+    border-radius: 999px;
+    padding: var(--sp-4) var(--sp-12);
+    margin-bottom: var(--sp-12);
+  }
+
+  h1 { font-size: 2.2em; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 var(--sp-10); }
+  h2 { font-size: 1.45em; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 var(--sp-6); }
+  h3 { font-size: 1.02em; font-weight: 600; margin: 0 0 var(--sp-4); }
+  p  { font-size: 1.0em; }
+  .lede { color: var(--color-text-muted); margin-top: 0; }
+  section { margin-top: var(--sp-48); }
+  .section-note { color: var(--color-text-muted); font-size: 0.93em; margin: 0 0 var(--sp-20); }
+
+  .banner {
+    display: flex; gap: var(--sp-12); align-items: flex-start;
+    background: #FFF9E6;
+    border: 1px solid #F5DFA0;
+    border-radius: var(--radius-md);
+    padding: var(--sp-14) var(--sp-16);
+    margin: var(--sp-20) 0 0;
+    font-size: 0.9em;
+    line-height: 1.55;
+  }
+  .banner strong { color: #7A5A00; }
+  .banner-icon { flex-shrink: 0; font-size: 1.1em; line-height: 1.4; }
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: var(--sp-20) var(--sp-24);
+  }
+
+  /* ── KPI row ─────────────────────────────────────────────────────── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
+    gap: var(--sp-12);
+    margin-top: var(--sp-24);
+  }
+  .kpi {
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--sp-16);
+  }
+  .kpi-label { font-size: 0.82em; color: var(--color-text-muted); font-weight: 600; letter-spacing: 0.01em; }
+  .kpi-value { font-size: 1.75em; font-weight: 700; letter-spacing: -0.02em; margin-top: var(--sp-4); line-height: 1.15; }
+  .kpi-sub { font-size: 0.82em; color: var(--color-text-muted); margin-top: var(--sp-2); }
+  .kpi.is-alert { background: #FDF3F3; border-color: #F0C9C9; }
+  .delta { font-weight: 600; }
+  .delta.up { color: var(--status-critical); }
+  .delta.down { color: #0a7d0a; }
+
+  /* ── Controls ────────────────────────────────────────────────────── */
+  .filter-row {
+    display: flex; flex-wrap: wrap; gap: var(--sp-12);
+    align-items: flex-end;
+    margin-bottom: var(--sp-16);
+  }
+  .field { display: flex; flex-direction: column; gap: var(--sp-4); }
+  .field label { font-size: 0.8em; font-weight: 600; color: var(--color-text-muted); }
+  select, input[type="number"] {
+    font-family: inherit; font-size: 0.92em;
+    padding: var(--sp-8) var(--sp-10);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text);
+    min-width: 130px;
+  }
+  select:focus, input:focus { outline: 2px solid var(--color-primary-soft); outline-offset: 1px; }
+
+  .seg { display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radius-sm); overflow: hidden; }
+  .seg button {
+    font-family: inherit; font-size: 0.88em; font-weight: 600;
+    padding: var(--sp-8) var(--sp-14);
+    background: var(--color-surface); color: var(--color-text-muted);
+    border: none; border-right: 1px solid var(--color-border); cursor: pointer;
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button[aria-pressed="true"] { background: var(--color-primary); color: #FFF; }
+
+  .btn {
+    font-family: inherit; font-size: 0.92em; font-weight: 600;
+    padding: var(--sp-10) var(--sp-16);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-primary);
+    background: var(--color-primary); color: #FFF; cursor: pointer;
+  }
+  .btn:hover { background: var(--color-primary-strong); border-color: var(--color-primary-strong); }
+  .btn-ghost {
+    background: var(--color-surface); color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    font-size: 0.82em; font-weight: 600; padding: var(--sp-6) var(--sp-12);
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
+  }
+  .btn-ghost:hover { background: var(--color-surface-muted); color: var(--color-text); }
+
+  /* ── Charts ──────────────────────────────────────────────────────── */
+  .chart-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: var(--sp-12); flex-wrap: wrap; margin-bottom: var(--sp-8);
+  }
+  .legend { display: flex; gap: var(--sp-16); flex-wrap: wrap; font-size: 0.85em; color: var(--color-text-muted); }
+  .legend-item { display: inline-flex; align-items: center; gap: var(--sp-6); }
+  .swatch { width: 12px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+  .swatch.dot { width: 9px; height: 9px; border-radius: 999px; }
+
+  .chart-wrap { position: relative; }
+  .chart-wrap svg { display: block; width: 100%; }
+  .tooltip {
+    position: absolute; pointer-events: none; opacity: 0;
+    background: var(--neutral-10); color: #FFF;
+    font-size: 0.8em; line-height: 1.5;
+    padding: var(--sp-8) var(--sp-10);
+    border-radius: var(--radius-sm);
+    white-space: nowrap; z-index: 10;
+    transition: opacity 0.1s;
+  }
+  .tooltip b { font-weight: 600; }
+  .tt-row { display: flex; align-items: center; gap: var(--sp-6); }
+
+  .table-view { display: none; margin-top: var(--sp-12); }
+  .table-view.is-open { display: block; }
+
+  /* ── Tables ──────────────────────────────────────────────────────── */
+  .table-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td {
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--sp-10) var(--sp-12);
+    text-align: left; font-size: 0.88em; white-space: nowrap;
+  }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  th {
+    background-color: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    font-weight: 600; font-size: 0.76em;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    position: sticky; top: 0; z-index: 1;
+  }
+  tbody tr:hover { background-color: var(--color-primary-tint); }
+
+  .badge {
+    display: inline-block; font-size: 0.78em; font-weight: 600;
+    padding: 2px var(--sp-8); border-radius: 999px; white-space: nowrap;
+  }
+  .badge.high { background: #FBE9E9; color: #9B2C2C; }
+  .badge.mid  { background: #FDF3DC; color: #7A5A00; }
+  .badge.low  { background: #E7F6E7; color: #1B5E20; }
+  .badge.type { background: var(--color-primary-tint); color: var(--color-primary-strong); border: 1px solid var(--color-primary-soft); }
+
+  .muted { color: var(--color-text-muted); }
+  .small { font-size: 0.85em; }
+  .action-cell { white-space: normal; min-width: 260px; color: var(--color-text-muted); font-size: 0.85em; }
+
+  /* ── Driver grid ─────────────────────────────────────────────────── */
+  .driver-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-16); }
+  .driver-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--sp-16) var(--sp-20); }
+  .driver-note { font-size: 0.83em; color: var(--color-text-muted); margin: 0 0 var(--sp-12); }
+
+  /* ── Simulator ───────────────────────────────────────────────────── */
+  .sim-grid { display: grid; grid-template-columns: minmax(280px, 340px) 1fr; gap: var(--sp-24); }
+  @media (max-width: 760px) { .sim-grid { grid-template-columns: 1fr; } }
+  .sim-inputs { display: flex; flex-direction: column; gap: var(--sp-16); }
+  .slider-field label { display: flex; justify-content: space-between; font-size: 0.85em; font-weight: 600; color: var(--color-text-muted); }
+  .slider-field label span { color: var(--color-primary-strong); font-variant-numeric: tabular-nums; }
+  input[type="range"] { width: 100%; accent-color: var(--color-primary); margin-top: var(--sp-6); }
+  .assump { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-10); }
+  .assump .field { min-width: 0; }
+  .assump input { min-width: 0; width: 100%; }
+
+  .sim-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-12); align-content: start; }
+  .sim-cell { background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--sp-14) var(--sp-16); }
+  .sim-cell.hero { grid-column: 1 / -1; background: var(--color-primary-tint); border-color: var(--color-primary-soft); }
+  .sim-label { font-size: 0.8em; color: var(--color-text-muted); font-weight: 600; }
+  .sim-value { font-size: 1.4em; font-weight: 700; letter-spacing: -0.02em; margin-top: var(--sp-2); }
+  .sim-cell.hero .sim-value { font-size: 2em; }
+  .sim-value.pos { color: #0a7d0a; }
+  .sim-value.neg { color: var(--status-critical); }
+  .sim-hint { font-size: 0.82em; color: var(--color-text-muted); margin-top: var(--sp-4); }
+
+  footer {
+    margin-top: var(--sp-64); padding-top: var(--sp-20);
+    border-top: 1px solid var(--color-border);
+    font-size: 0.85em; color: var(--color-text-muted);
+  }
+  footer p { font-size: 1em; margin: var(--sp-6) 0; }
+
+  .loading { color: var(--color-text-muted); padding: var(--sp-32); text-align: center; }
+</style>
+</head>
+<body>
+  <header>
+    <span class="eyebrow">Growth · CRM</span>
+    <h1>Sparkify 이탈 방어 대시보드</h1>
+    <p class="lede">
+      누가 이탈할지, 왜 이탈하는지, 캠페인 예산을 어디에 쓸지를 한 화면에서 결정합니다.
+    </p>
+    <div class="banner">
+      <span class="banner-icon" aria-hidden="true">⚠️</span>
+      <div>
+        <strong>합성 데이터입니다.</strong>
+        실제 서비스 지표가 아닙니다.
+        <a href="https://www.kaggle.com/code/chriskue/sparkify-user-churn-prediction" target="_blank" rel="noopener">Sparkify 원본 데이터셋</a>의
+        통계적 구조(이탈률 23.1%, 관측 기간, 드라이버 중요도)를 보존한 채 5,000명 규모로 재생성했습니다.
+        원본 mini 데이터셋은 고유 사용자가 225명뿐이라 세그먼트 분석에 표본이 부족합니다.
+        생성 방식은 <a href="docs/PRD-churn.md">PRD §6</a>, 재현 코드는
+        <a href="scripts/build_churn_data.py">build_churn_data.py</a>를 참고하세요.
+      </div>
+    </div>
+  </header>
+
+  <div class="kpi-grid" id="kpis"></div>
+
+  <!-- ── §1 모니터링 ─────────────────────────────────────────────── -->
+  <section id="sec-trend">
+    <span class="eyebrow">모니터링</span>
+    <h2>이탈률이 어떻게 변하고 있나</h2>
+    <p class="section-note">
+      해지(계정 소멸)와 다운그레이드(유료→무료)는 보내야 할 메시지가 완전히 다르므로 분리해서 봅니다.
+      일별 값은 표본이 작아 튀므로 <b>7일 이동평균</b>을 실선으로, 일별 실측은 옅은 점으로 겹쳐 놓았습니다.
+    </p>
+
+    <div class="filter-row">
+      <div class="seg" id="period-seg" role="group" aria-label="기간 선택">
+        <button type="button" data-days="0" aria-pressed="true">전체</button>
+        <button type="button" data-days="30" aria-pressed="false">최근 30일</button>
+        <button type="button" data-days="14" aria-pressed="false">최근 14일</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h3>일별 신규 이탈</h3>
+          <div class="small muted" id="trend-range"></div>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>해지 (7일 이동평균)</span>
+          <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>다운그레이드 (7일 이동평균)</span>
+          <button class="btn-ghost" type="button" data-toggle="tv-trend">표로 보기</button>
+        </div>
+      </div>
+      <div class="chart-wrap" id="chart-trend"></div>
+      <div class="table-view" id="tv-trend"></div>
+    </div>
+
+    <div class="card" style="margin-top:var(--sp-16)">
+      <div class="chart-head">
+        <div>
+          <h3>일별 활성 사용자</h3>
+          <div class="small muted">이탈 추이와 축이 다르므로 별도 차트로 분리했습니다</div>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>활성 사용자</span>
+          <button class="btn-ghost" type="button" data-toggle="tv-active">표로 보기</button>
+        </div>
+      </div>
+      <div class="chart-wrap" id="chart-active"></div>
+      <div class="table-view" id="tv-active"></div>
+    </div>
+  </section>
+
+  <!-- ── §2 원인 진단 ────────────────────────────────────────────── -->
+  <section id="sec-drivers">
+    <span class="eyebrow">원인 진단</span>
+    <h2>왜 이탈하는가</h2>
+    <p class="section-note">
+      "피처 중요도" 막대는 액션으로 옮기기 어렵습니다. 대신 각 드라이버를 <b>구간으로 나눠 실제 이탈률</b>을 비교합니다.
+      어느 구간에서 이탈률이 꺾이는지가 곧 개입 지점입니다. 회색 막대는 표본 100명 미만이라 신뢰하기 어려운 구간입니다.
+    </p>
+    <div class="driver-grid" id="drivers"></div>
+
+    <div class="card" style="margin-top:var(--sp-16)">
+      <div class="chart-head">
+        <div>
+          <h3>가입 코호트별 이탈률</h3>
+          <div class="small muted" id="cohort-caveat"></div>
+        </div>
+        <div class="legend">
+          <button class="btn-ghost" type="button" data-toggle="tv-cohort">표로 보기</button>
+        </div>
+      </div>
+      <div class="chart-wrap" id="chart-cohort"></div>
+      <div class="table-view" id="tv-cohort"></div>
+    </div>
+  </section>
+
+  <!-- ── §3 타겟 리스트 ──────────────────────────────────────────── -->
+  <section id="sec-targets">
+    <span class="eyebrow">타겟 리스트</span>
+    <h2>지금 누가 이탈 위험인가</h2>
+    <p class="section-note">
+      아직 해지하지 않은 사용자만 대상입니다. 위험 점수는 모델이 예측한 이탈 확률이고,
+      <b>위험 유형</b>은 그 사용자의 위험을 가장 크게 끌어올린 요인 하나를 고른 것입니다.
+      필터를 걸고 CSV로 내려받아 CRM 툴에 그대로 올리세요.
+    </p>
+
+    <div class="filter-row" id="target-filters">
+      <div class="field">
+        <label for="f-tier">위험 등급</label>
+        <select id="f-tier">
+          <option value="all">전체</option>
+          <option value="high">높음 (0.70 이상)</option>
+          <option value="mid">중간 (0.40~0.70)</option>
+          <option value="low">낮음 (0.40 미만)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-type">위험 유형</label>
+        <select id="f-type"><option value="all">전체</option></select>
+      </div>
+      <div class="field">
+        <label for="f-level">요금제</label>
+        <select id="f-level">
+          <option value="all">전체</option>
+          <option value="1">유료</option>
+          <option value="0">무료</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-tenure">가입 기간</label>
+        <select id="f-tenure">
+          <option value="all">전체</option>
+          <option value="0-30">30일 미만</option>
+          <option value="30-60">30~60일</option>
+          <option value="60-90">60~90일</option>
+          <option value="90-999">90일 이상</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-gender">성별</label>
+        <select id="f-gender">
+          <option value="all">전체</option>
+          <option value="1">남성</option>
+          <option value="0">여성</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn" id="btn-csv" type="button">CSV 내보내기</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0">
+      <div style="padding:var(--sp-14) var(--sp-20); border-bottom:1px solid var(--color-border)">
+        <span id="target-count" class="small muted">불러오는 중…</span>
+      </div>
+      <div class="table-scroll" style="max-height:560px; overflow-y:auto">
+        <table id="target-table">
+          <thead>
+            <tr>
+              <th>User ID</th>
+              <th class="num">위험 점수</th>
+              <th>등급</th>
+              <th>위험 유형</th>
+              <th>요금제</th>
+              <th class="num">가입일수</th>
+              <th class="num">세션</th>
+              <th class="num">Thumbs Down</th>
+              <th class="num">친구</th>
+              <th>추천 액션</th>
+            </tr>
+          </thead>
+          <tbody id="target-body">
+            <tr><td colspan="10" class="loading">사용자 데이터를 불러오는 중…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3 style="margin-top:var(--sp-32)">위험 유형별 캠페인 대상</h3>
+    <p class="section-note">
+      모델 운영 임계값(<span id="thr-label"></span>) 이상으로 분류된 잔존 사용자를 유형별로 나눈 것입니다.
+      <b>예측 이탈률</b>은 앞으로의 전망이고, <b>과거 적중률</b>은 같은 조건으로 분류했을 때
+      실제로 이탈했던 비율입니다 — 모델을 믿어도 되는지 판단하는 근거입니다.
+    </p>
+    <div class="card" style="padding:0">
+      <div class="table-scroll">
+        <table id="segment-table">
+          <thead>
+            <tr>
+              <th>위험 유형</th>
+              <th class="num">캠페인 대상</th>
+              <th class="num">유료</th>
+              <th class="num">예측 이탈률</th>
+              <th class="num">과거 적중률</th>
+              <th class="num">유형 전체 이탈률</th>
+              <th>추천 CRM 액션</th>
+            </tr>
+          </thead>
+          <tbody id="segment-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── §4 ROI 시뮬레이터 ───────────────────────────────────────── -->
+  <section id="sec-roi">
+    <span class="eyebrow">의사결정</span>
+    <h2>캠페인을 어디에 써야 ROI가 높은가</h2>
+    <p class="section-note">
+      이 화면의 목적은 설득이 아니라 <b>손익분기점을 아는 것</b>입니다. 기본값은 낙관적으로 잡지 않았습니다.
+      타겟을 넓힐수록 이탈 가능성이 낮은 사람에게도 비용이 나가므로, 어느 지점부터 손해인지 확인하세요.
+    </p>
+
+    <div class="card">
+      <div class="sim-grid">
+        <div class="sim-inputs">
+          <div class="slider-field">
+            <label for="s-pct">타겟 범위 (위험도 상위) <span id="s-pct-val">10%</span></label>
+            <input type="range" id="s-pct" min="1" max="60" value="10" step="1">
+          </div>
+          <div class="slider-field">
+            <label for="s-save">예상 방어율 <span id="s-save-val">25%</span></label>
+            <input type="range" id="s-save" min="0" max="60" value="25" step="1">
+            <div class="sim-hint">리텐션 캠페인 통상 범위 15~35%</div>
+          </div>
+          <div class="assump">
+            <div class="field">
+              <label for="s-cost">1인당 비용 (원)</label>
+              <input type="number" id="s-cost" value="3000" min="0" step="100">
+            </div>
+            <div class="field">
+              <label for="s-fee">월 구독료 (원)</label>
+              <input type="number" id="s-fee" value="10900" min="0" step="100">
+            </div>
+            <div class="field">
+              <label for="s-months">유지 개월</label>
+              <input type="number" id="s-months" value="6" min="1" step="1">
+            </div>
+            <div class="field">
+              <label for="s-adarpu">무료 ARPU (원/월)</label>
+              <input type="number" id="s-adarpu" value="1200" min="0" step="100">
+            </div>
+          </div>
+          <div class="sim-hint">
+            무료 사용자는 구독료가 없으므로 광고 기반 ARPU로 가치를 매깁니다.
+            0으로 두면 무료 사용자 방어를 매출 0으로 계산합니다.
+          </div>
+        </div>
+
+        <div class="sim-out" id="sim-out">
+          <div class="sim-cell hero">
+            <div class="sim-label">순이익</div>
+            <div class="sim-value" id="o-profit">—</div>
+            <div class="sim-hint" id="o-roi"></div>
+          </div>
+          <div class="sim-cell">
+            <div class="sim-label">타겟 인원</div>
+            <div class="sim-value" id="o-targets">—</div>
+            <div class="sim-hint" id="o-targets-sub"></div>
+          </div>
+          <div class="sim-cell">
+            <div class="sim-label">총 캠페인 비용</div>
+            <div class="sim-value" id="o-cost">—</div>
+          </div>
+          <div class="sim-cell">
+            <div class="sim-label">예상 방어 인원</div>
+            <div class="sim-value" id="o-saved">—</div>
+            <div class="sim-hint" id="o-saved-sub"></div>
+          </div>
+          <div class="sim-cell">
+            <div class="sim-label">구한 매출</div>
+            <div class="sim-value" id="o-revenue">—</div>
+          </div>
+          <div class="sim-cell" style="grid-column:1 / -1">
+            <div class="sim-label">손익분기 방어율</div>
+            <div class="sim-value" id="o-breakeven">—</div>
+            <div class="sim-hint" id="o-breakeven-sub"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p><strong>데이터</strong> — 합성 데이터(시드 42, 5,000명). 실제 서비스 지표가 아닙니다.</p>
+    <p><strong>원본</strong> —
+      <a href="https://www.kaggle.com/code/chriskue/sparkify-user-churn-prediction" target="_blank" rel="noopener">Sparkify User Churn Prediction</a>
+      (Udacity Data Scientist Nanodegree Capstone, Apache 2.0)</p>
+    <p><strong>모델</strong> — <span id="model-line"></span></p>
+    <p><strong>면책</strong> — 대시보드 설계 검증용이며, 수치를 실제 의사결정에 사용해서는 안 됩니다.</p>
+    <p style="margin-top:var(--sp-16)"><a href="index.html">← 홈으로</a> · <a href="dashboard.html">아파트 실거래 대시보드</a></p>
+  </footer>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── formatters ────────────────────────────────────────────────────
+  const nf = new Intl.NumberFormat("ko-KR");
+  const int = (n) => nf.format(Math.round(n));
+  const pct = (v, d = 1) => (v * 100).toFixed(d) + "%";
+  const won = (n) => {
+    const v = Math.round(n);
+    if (Math.abs(v) >= 100000000) return (v / 100000000).toFixed(2) + "억원";
+    if (Math.abs(v) >= 10000) return int(v / 10000) + "만원";
+    return int(v) + "원";
+  };
+  const el = (id) => document.getElementById(id);
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const mk = (tag, attrs) => {
+    const n = document.createElementNS(SVG_NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  };
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // ── state ─────────────────────────────────────────────────────────
+  let SUMMARY = null;
+  let USERS = null;       // {cols, rows: [obj]}
+  let RETAINED = [];      // 잔존 사용자 (churn === 0), 위험 점수 내림차순
+  let periodDays = 0;
+  const charts = [];      // 리사이즈 시 재렌더할 차트들
+
+  const TIER = (score) =>
+    score >= 0.7 ? { key: "high", label: "높음" }
+      : score >= 0.4 ? { key: "mid", label: "중간" }
+        : { key: "low", label: "낮음" };
+
+  // ── chart helpers ─────────────────────────────────────────────────
+  function register(host, draw) {
+    charts.push({ host, draw });
+    draw();
+  }
+
+  function tooltipFor(host) {
+    let tip = host.querySelector(".tooltip");
+    if (!tip) {
+      tip = document.createElement("div");
+      tip.className = "tooltip";
+      host.appendChild(tip);
+    }
+    return tip;
+  }
+
+  function showTip(tip, host, x, y, html) {
+    tip.innerHTML = html;
+    tip.style.opacity = "1";
+    const hw = host.clientWidth;
+    const tw = tip.offsetWidth;
+    let left = x + 14;
+    if (left + tw > hw) left = x - tw - 14;
+    if (left < 0) left = 0;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(0, y - tip.offsetHeight - 10) + "px";
+  }
+
+  function niceMax(v) {
+    if (v <= 0) return 1;
+    const mag = Math.pow(10, Math.floor(Math.log10(v)));
+    const norm = v / mag;
+    const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+    return step * mag;
+  }
+
+  /**
+   * 다중 시리즈 라인 차트. 한 축만 쓴다 (이중 축 금지).
+   * series: [{name, color, values, dots}]
+   */
+  function lineChart(host, opts) {
+    host.querySelectorAll("svg").forEach((n) => n.remove());
+    const W = Math.max(320, host.clientWidth);
+    const H = opts.height || 260;
+    const M = { t: 12, r: 14, b: 34, l: 44 };
+    const iw = W - M.l - M.r;
+    const ih = H - M.t - M.b;
+
+    const svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img" });
+    svg.setAttribute("aria-label", opts.aria || "라인 차트");
+
+    const n = opts.labels.length;
+    let maxV = 0;
+    opts.series.forEach((s) => s.values.forEach((v) => { if (v > maxV) maxV = v; }));
+    if (opts.dots) opts.dots.forEach((s) => s.values.forEach((v) => { if (v > maxV) maxV = v; }));
+    maxV = niceMax(maxV || 1);
+
+    const X = (i) => M.l + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
+    const Y = (v) => M.t + ih - (v / maxV) * ih;
+
+    // gridlines + y ticks (solid hairlines, never dashed)
+    const ticks = 4;
+    for (let i = 0; i <= ticks; i++) {
+      const v = (maxV / ticks) * i;
+      const y = Y(v);
+      svg.appendChild(mk("line", {
+        x1: M.l, x2: M.l + iw, y1: y, y2: y,
+        stroke: i === 0 ? "var(--axis-line)" : "var(--grid-line)", "stroke-width": 1,
+      }));
+      const t = mk("text", {
+        x: M.l - 8, y: y + 4, "text-anchor": "end",
+        fill: "var(--ink-muted)", "font-size": 11, "font-family": "inherit",
+      });
+      t.textContent = int(v);
+      svg.appendChild(t);
+    }
+
+    // x labels — 라벨 하나에 최소 64px를 확보해 개수를 정한다 (좁은 화면 겹침 방지)
+    const maxLabels = Math.max(2, Math.min(6, Math.floor(iw / 64)));
+    const stepX = Math.max(1, Math.ceil(n / maxLabels));
+    for (let i = 0; i < n; i += stepX) {
+      const t = mk("text", {
+        x: X(i), y: H - 12, "text-anchor": "middle",
+        fill: "var(--ink-muted)", "font-size": 11, "font-family": "inherit",
+      });
+      t.textContent = opts.labels[i];
+      svg.appendChild(t);
+    }
+
+    // faint daily dots (실측)
+    (opts.dots || []).forEach((s) => {
+      s.values.forEach((v, i) => {
+        svg.appendChild(mk("circle", { cx: X(i), cy: Y(v), r: 1.8, fill: s.color, opacity: 0.28 }));
+      });
+    });
+
+    // lines (2px)
+    opts.series.forEach((s) => {
+      const d = s.values.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+      svg.appendChild(mk("path", {
+        d, fill: "none", stroke: s.color, "stroke-width": 2,
+        "stroke-linejoin": "round", "stroke-linecap": "round",
+      }));
+    });
+
+    // hover layer
+    const crosshair = mk("line", {
+      y1: M.t, y2: M.t + ih, stroke: "var(--axis-line)", "stroke-width": 1, opacity: 0,
+    });
+    svg.appendChild(crosshair);
+    const markers = opts.series.map((s) => {
+      const c = mk("circle", { r: 4.5, fill: s.color, stroke: "#FFF", "stroke-width": 2, opacity: 0 });
+      svg.appendChild(c);
+      return c;
+    });
+
+    const hit = mk("rect", { x: M.l, y: M.t, width: iw, height: ih, fill: "transparent" });
+    svg.appendChild(hit);
+    host.appendChild(svg);
+
+    const tip = tooltipFor(host);
+    const scale = () => W / svg.getBoundingClientRect().width;
+
+    function move(ev) {
+      const r = svg.getBoundingClientRect();
+      const px = (ev.clientX - r.left) * scale();
+      let i = Math.round(((px - M.l) / iw) * (n - 1));
+      i = Math.max(0, Math.min(n - 1, i));
+      crosshair.setAttribute("x1", X(i));
+      crosshair.setAttribute("x2", X(i));
+      crosshair.setAttribute("opacity", 1);
+      markers.forEach((m, k) => {
+        m.setAttribute("cx", X(i));
+        m.setAttribute("cy", Y(opts.series[k].values[i]));
+        m.setAttribute("opacity", 1);
+      });
+      const rows = opts.series.map((s, k) =>
+        `<div class="tt-row"><span class="swatch dot" style="background:${s.color}"></span>${esc(s.name)} <b>${opts.fmt ? opts.fmt(s.values[i]) : int(s.values[i])}</b></div>`
+      ).join("");
+      const extra = (opts.dots || []).map((s) =>
+        `<div class="tt-row muted">${esc(s.name)} ${int(s.values[i])}</div>`
+      ).join("");
+      showTip(tip, host, X(i) / scale(), Y(Math.max(...opts.series.map((s) => s.values[i]))) / scale(),
+        `<b>${esc(opts.tipLabels ? opts.tipLabels[i] : opts.labels[i])}</b>${rows}${extra}`);
+    }
+    function leave() {
+      tip.style.opacity = "0";
+      crosshair.setAttribute("opacity", 0);
+      markers.forEach((m) => m.setAttribute("opacity", 0));
+    }
+    hit.addEventListener("mousemove", move);
+    hit.addEventListener("mouseleave", leave);
+  }
+
+  /**
+   * 가로 막대 차트. 단일 시리즈이므로 색은 슬롯 1 하나만 쓴다.
+   * rows: [{label, rate, users, lowSample}]
+   */
+  function barChart(host, rows, opts) {
+    host.querySelectorAll("svg").forEach((n) => n.remove());
+    opts = opts || {};
+    const W = Math.max(280, host.clientWidth);
+    const rowH = 34;
+    const H = rows.length * rowH + 12;
+    const maxRate = Math.max(0.0001, ...rows.map((r) => r.rate));
+
+    const svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img" });
+    svg.setAttribute("aria-label", opts.aria || "구간별 이탈률");
+    const tip = tooltipFor(host);
+    host.appendChild(svg);   // getBBox는 문서에 붙은 뒤에만 유효하다
+
+    // 축 너비를 상수로 두면 폰트·언어·구간명이 바뀔 때 라벨이 잘린다.
+    // 실제 렌더된 글자 폭을 재서 필요한 만큼만 확보한다.
+    const labels = rows.map((r) => {
+      const t = mk("text", {
+        x: 0, y: -100, "text-anchor": "end",
+        fill: "var(--color-text-muted)", "font-size": 12, "font-family": "inherit",
+      });
+      t.textContent = r.label;
+      svg.appendChild(t);
+      return t;
+    });
+    const values = rows.map((r) => {
+      const t = mk("text", {
+        x: 0, y: -100,
+        fill: "var(--color-text)", "font-size": 12, "font-weight": 600, "font-family": "inherit",
+      });
+      t.textContent = pct(r.rate);
+      svg.appendChild(t);
+      return t;
+    });
+
+    const measure = (nodes) => Math.max(0, ...nodes.map((n) => n.getBBox().width));
+    const labelW = Math.min(W * 0.45, measure(labels) + 12);
+    const valueW = measure(values) + 12;
+    const iw = Math.max(24, W - labelW - valueW);
+
+    rows.forEach((r, i) => {
+      const y = i * rowH + 6;
+      const bh = 14;
+      const bw = Math.max(2, (r.rate / maxRate) * iw);
+      const dim = r.lowSample;
+
+      const lab = labels[i];
+      lab.setAttribute("x", labelW - 10);
+      lab.setAttribute("y", y + bh - 2);
+
+      const bar = mk("rect", {
+        x: labelW, y: y, width: bw, height: bh, rx: 4,
+        fill: dim ? "var(--neutral-80)" : "var(--series-1)",
+      });
+      svg.appendChild(bar);
+
+      const val = values[i];
+      val.setAttribute("x", labelW + bw + 8);
+      val.setAttribute("y", y + bh - 2);
+
+      // 히트 영역은 막대보다 크게 (24px 이상)
+      const hit = mk("rect", { x: 0, y: i * rowH, width: W, height: rowH, fill: "transparent" });
+      svg.appendChild(hit);
+      const scale = () => W / svg.getBoundingClientRect().width;
+      hit.addEventListener("mousemove", (ev) => {
+        const rr = svg.getBoundingClientRect();
+        showTip(tip, host, (ev.clientX - rr.left), (y + bh) / scale() + 6,
+          `<b>${esc(r.label)}</b>` +
+          (r.range ? `<div class="muted">${esc(r.range)}</div>` : "") +
+          `<div>이탈률 <b>${pct(r.rate)}</b></div>` +
+          `<div class="muted">${int(r.churned)} / ${int(r.users)}명</div>` +
+          (dim ? `<div class="muted">표본 100명 미만 — 신뢰 낮음</div>` : ""));
+      });
+      hit.addEventListener("mouseleave", () => { tip.style.opacity = "0"; });
+    });
+  }
+
+  // numFrom: 이 인덱스부터 오른쪽 정렬(숫자 컬럼). 앞쪽은 텍스트로 왼쪽 정렬.
+  function tableView(host, headers, rows, numFrom) {
+    const nf0 = numFrom == null ? 1 : numFrom;
+    const cls = (i) => (i >= nf0 ? "num" : "");
+    host.innerHTML =
+      `<div class="table-scroll"><table><thead><tr>` +
+      headers.map((h, i) => `<th class="${cls(i)}">${esc(h)}</th>`).join("") +
+      `</tr></thead><tbody>` +
+      rows.map((r) => `<tr>` + r.map((c, i) => `<td class="${cls(i)}">${esc(c)}</td>`).join("") + `</tr>`).join("") +
+      `</tbody></table></div>`;
+  }
+
+  // ── renderers ─────────────────────────────────────────────────────
+  function renderKpis() {
+    const k = SUMMARY.kpis;
+    const d = k.churn_delta;
+    const dir = d > 0 ? "up" : "down";
+    const arrow = d > 0 ? "▲" : "▼";
+    el("kpis").innerHTML = `
+      <div class="kpi">
+        <div class="kpi-label">전체 사용자</div>
+        <div class="kpi-value">${int(k.total_users)}</div>
+        <div class="kpi-sub">잔존 ${int(k.retained_users)}명</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">해지율 (Hard Churn)</div>
+        <div class="kpi-value">${pct(k.hard_churn_rate)}</div>
+        <div class="kpi-sub">${int(k.hard_churn_users)}명 해지</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">다운그레이드율 (Soft)</div>
+        <div class="kpi-value">${pct(k.soft_churn_rate)}</div>
+        <div class="kpi-sub">유료 ${int(k.paid_users)}명 중 ${int(k.soft_churn_users)}명</div>
+      </div>
+      <div class="kpi is-alert">
+        <div class="kpi-label">후반기 해지 변화</div>
+        <div class="kpi-value"><span class="delta ${dir}">${arrow} ${pct(Math.abs(d))}</span></div>
+        <div class="kpi-sub">${int(k.prev_churn)} → ${int(k.recent_churn)}명</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">고위험 잔존군</div>
+        <div class="kpi-value">${int(k.high_risk_users)}</div>
+        <div class="kpi-sub">유료 ${int(k.high_risk_paid_users)}명</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">위험 MRR</div>
+        <div class="kpi-value">${won(k.at_risk_mrr)}</div>
+        <div class="kpi-sub">고위험 유료 × 월 구독료</div>
+      </div>`;
+  }
+
+  function slicePeriod(arr) {
+    return periodDays > 0 ? arr.slice(-periodDays) : arr;
+  }
+
+  function renderTrend() {
+    const d = SUMMARY.daily;
+    const dates = slicePeriod(d.dates);
+    const md = (s) => s.slice(5).replace("-", "/");
+
+    el("trend-range").textContent = `${dates[0]} ~ ${dates[dates.length - 1]} (${dates.length}일)`;
+
+    const host = el("chart-trend");
+    const cfg = {
+      labels: dates.map(md),
+      tipLabels: dates,
+      height: 260,
+      aria: "일별 해지 및 다운그레이드 7일 이동평균",
+      series: [
+        { name: "해지", color: "var(--series-1)", values: slicePeriod(d.churn_ma7) },
+        { name: "다운그레이드", color: "var(--series-2)", values: slicePeriod(d.downgrade_ma7) },
+      ],
+      dots: [
+        { name: "해지(일별)", color: "var(--series-1)", values: slicePeriod(d.churn) },
+        { name: "다운그레이드(일별)", color: "var(--series-2)", values: slicePeriod(d.downgrade) },
+      ],
+      fmt: (v) => v.toFixed(1) + "명",
+    };
+    lineChart(host, cfg);
+    host._cfg = cfg;
+
+    tableView(el("tv-trend"), ["날짜", "해지", "다운그레이드", "해지 7일평균", "다운 7일평균"],
+      dates.map((dt, i) => [dt, int(slicePeriod(d.churn)[i]), int(slicePeriod(d.downgrade)[i]),
+        slicePeriod(d.churn_ma7)[i].toFixed(1), slicePeriod(d.downgrade_ma7)[i].toFixed(1)]));
+
+    const ahost = el("chart-active");
+    const acfg = {
+      labels: dates.map(md), tipLabels: dates, height: 200,
+      aria: "일별 활성 사용자",
+      series: [{ name: "활성 사용자", color: "var(--series-1)", values: slicePeriod(d.active) }],
+      fmt: (v) => int(v) + "명",
+    };
+    lineChart(ahost, acfg);
+    ahost._cfg = acfg;
+    tableView(el("tv-active"), ["날짜", "활성 사용자"],
+      dates.map((dt, i) => [dt, int(slicePeriod(d.active)[i])]));
+  }
+
+  function renderDrivers() {
+    const wrap = el("drivers");
+    wrap.innerHTML = "";
+    SUMMARY.drivers.forEach((dv) => {
+      const card = document.createElement("div");
+      card.className = "driver-card";
+      card.innerHTML =
+        `<div class="chart-head"><div><h3>${esc(dv.title)}</h3></div>
+         <button class="btn-ghost" type="button" data-toggle="tv-${dv.key}">표로 보기</button></div>
+         <p class="driver-note">${esc(dv.note)}</p>
+         <div class="chart-wrap" id="ch-${dv.key}"></div>
+         <div class="table-view" id="tv-${dv.key}"></div>`;
+      wrap.appendChild(card);
+
+      const rows = dv.rows.map((r) => ({
+        label: r.label, range: r.range, rate: r.rate, users: r.users,
+        churned: r.churned, lowSample: r.low_sample,
+      }));
+      const host = card.querySelector("#ch-" + dv.key);
+      register(host, () => barChart(host, rows, { aria: dv.title + " 구간별 이탈률" }));
+
+      tableView(card.querySelector("#tv-" + dv.key), ["구간", "범위", "사용자", "이탈", "이탈률"],
+        dv.rows.map((r) => [r.label, r.range || "—", int(r.users), int(r.churned), pct(r.rate)]), 2);
+    });
+  }
+
+  function renderCohorts() {
+    const c = SUMMARY.cohorts;
+    el("cohort-caveat").textContent =
+      "최근 코호트일수록 이탈률이 높은 것은 획득 품질 저하가 아니라 재적 기간이 짧기 때문입니다 — 가입 기간 차트와 함께 읽으세요.";
+    const rows = c.map((r) => ({
+      label: r.month, rate: r.rate, users: r.users, churned: r.churned, lowSample: r.users < 100,
+    }));
+    const host = el("chart-cohort");
+    register(host, () => barChart(host, rows, { aria: "가입 코호트별 이탈률" }));
+    tableView(el("tv-cohort"), ["가입 월", "사용자", "이탈", "이탈률"],
+      c.map((r) => [r.month, int(r.users), int(r.churned), pct(r.rate)]));
+  }
+
+  function renderSegments() {
+    el("thr-label").textContent = "위험 점수 " + SUMMARY.model.threshold + " 이상";
+    el("segment-body").innerHTML = SUMMARY.segments.map((s) => `
+      <tr>
+        <td><span class="badge type">${esc(s.label)}</span></td>
+        <td class="num">${int(s.target_users)}</td>
+        <td class="num">${int(s.paid_users)}</td>
+        <td class="num">${pct(s.expected_churn_rate)}</td>
+        <td class="num">${pct(s.flagged_hit_rate)}</td>
+        <td class="num muted">${pct(s.segment_churn_rate)}</td>
+        <td class="action-cell">${esc(s.action)}</td>
+      </tr>`).join("");
+
+    const m = SUMMARY.model;
+    el("model-line").textContent =
+      `임계값 ${m.threshold} · Precision ${m.precision} · Recall ${m.recall} · F1 ${m.f1} · Accuracy ${m.accuracy}. ` + m.note;
+  }
+
+  // ── target list ───────────────────────────────────────────────────
+  function parseUsers(payload) {
+    const c = payload.columns;
+    const idx = {};
+    c.forEach((name, i) => { idx[name] = i; });
+    const D = payload.dicts;
+    return payload.rows.map((r) => ({
+      uid: r[idx.uid],
+      risk: r[idx.risk_score],
+      type: D.risk_type[r[idx.risk_type]],
+      paid: r[idx.is_paid],
+      male: r[idx.is_male],
+      churn: r[idx.churn],
+      downgrade: r[idx.downgrade],
+      days: r[idx.days_member],
+      sessions: r[idx.num_sessions],
+      songs: r[idx.num_songs],
+      up: r[idx.num_thumbs_up],
+      down: r[idx.num_thumbs_down],
+      playlist: r[idx.num_playlist],
+      friend: r[idx.num_friend],
+      advert: r[idx.num_advert],
+      freq: r[idx.session_freq],
+      state: D.state[r[idx.state]],
+      os: D.os[r[idx.os]],
+    }));
+  }
+
+  function currentFilter() {
+    const tier = el("f-tier").value;
+    const type = el("f-type").value;
+    const level = el("f-level").value;
+    const tenure = el("f-tenure").value;
+    const gender = el("f-gender").value;
+    let lo = -1, hi = 1e9;
+    if (tenure !== "all") { const p = tenure.split("-"); lo = +p[0]; hi = +p[1]; }
+
+    return RETAINED.filter((u) => {
+      if (tier !== "all" && TIER(u.risk).key !== tier) return false;
+      if (type !== "all" && u.type !== type) return false;
+      if (level !== "all" && String(u.paid) !== level) return false;
+      if (gender !== "all" && String(u.male) !== gender) return false;
+      if (tenure !== "all" && !(u.days >= lo && u.days < hi)) return false;
+      return true;
+    });
+  }
+
+  const MAX_ROWS = 100;
+
+  function renderTargets() {
+    const rows = currentFilter();
+    const types = SUMMARY.risk_types;
+    el("target-count").innerHTML =
+      `필터 결과 <b>${int(rows.length)}명</b> · 화면에는 위험도 상위 ${int(Math.min(MAX_ROWS, rows.length))}행만 표시합니다. ` +
+      `<span class="muted">CSV에는 ${int(rows.length)}명 전체가 담깁니다.</span>`;
+
+    if (!rows.length) {
+      el("target-body").innerHTML = `<tr><td colspan="10" class="loading">조건에 맞는 사용자가 없습니다.</td></tr>`;
+      return;
+    }
+    el("target-body").innerHTML = rows.slice(0, MAX_ROWS).map((u) => {
+      const t = TIER(u.risk);
+      const meta = types[u.type] || { label: u.type, action: "" };
+      return `<tr>
+        <td>${u.uid}</td>
+        <td class="num"><b>${u.risk.toFixed(3)}</b></td>
+        <td><span class="badge ${t.key}">${t.label}</span></td>
+        <td><span class="badge type">${esc(meta.label)}</span></td>
+        <td>${u.paid ? "유료" : "무료"}</td>
+        <td class="num">${int(u.days)}</td>
+        <td class="num">${int(u.sessions)}</td>
+        <td class="num">${int(u.down)}</td>
+        <td class="num">${int(u.friend)}</td>
+        <td class="action-cell">${esc(meta.action)}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function exportCsv() {
+    const rows = currentFilter();
+    if (!rows.length) { alert("조건에 맞는 사용자가 없습니다."); return; }
+    const types = SUMMARY.risk_types;
+    const head = ["user_id", "risk_score", "risk_tier", "risk_type", "level",
+      "days_member", "num_sessions", "num_thumbs_down", "num_friend", "recommended_action"];
+    const q = (v) => {
+      const s = String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [head.join(",")];
+    rows.forEach((u) => {
+      const meta = types[u.type] || { label: u.type, action: "" };
+      lines.push([u.uid, u.risk, TIER(u.risk).label, meta.label, u.paid ? "paid" : "free",
+        u.days, u.sessions, u.down, u.friend, meta.action].map(q).join(","));
+    });
+    // BOM — Excel이 UTF-8 한글을 깨뜨리지 않도록
+    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sparkify-churn-targets_${rows.length}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ── ROI simulator ─────────────────────────────────────────────────
+  function renderSim() {
+    if (!RETAINED.length) return;
+    const p = +el("s-pct").value;
+    const save = +el("s-save").value / 100;
+    const cost1 = +el("s-cost").value || 0;
+    const fee = +el("s-fee").value || 0;
+    const months = +el("s-months").value || 1;
+    const adArpu = +el("s-adarpu").value || 0;
+
+    el("s-pct-val").textContent = p + "%";
+    el("s-save-val").textContent = (save * 100).toFixed(0) + "%";
+
+    const count = Math.max(1, Math.round(RETAINED.length * p / 100));
+    const targets = RETAINED.slice(0, count);   // 이미 위험도 내림차순
+
+    // 예측 이탈 인원 = 위험 점수의 합 (보정된 확률의 기댓값)
+    let expPaid = 0, expFree = 0, paidCount = 0;
+    targets.forEach((u) => {
+      if (u.paid) { expPaid += u.risk; paidCount++; } else { expFree += u.risk; }
+    });
+    const expTotal = expPaid + expFree;
+
+    const savedPaid = expPaid * save;
+    const savedFree = expFree * save;
+    const savedTotal = savedPaid + savedFree;
+
+    const cost = targets.length * cost1;
+    const revenue = (savedPaid * fee + savedFree * adArpu) * months;
+    const profit = revenue - cost;
+    const roi = cost > 0 ? profit / cost : 0;
+
+    // 손익분기 방어율: 방어율 × (기대이탈 가치) × 개월 = 비용
+    const valuePerFullSave = (expPaid * fee + expFree * adArpu) * months;
+    const breakeven = valuePerFullSave > 0 ? cost / valuePerFullSave : Infinity;
+
+    el("o-targets").textContent = int(targets.length) + "명";
+    el("o-targets-sub").textContent = `유료 ${int(paidCount)}명 · 위험 점수 ${targets[targets.length - 1].risk.toFixed(2)} 이상`;
+    el("o-cost").textContent = won(cost);
+    el("o-saved").textContent = savedTotal.toFixed(0) + "명";
+    el("o-saved-sub").textContent = `예상 이탈 ${expTotal.toFixed(0)}명 중 (유료 ${savedPaid.toFixed(0)}명)`;
+    el("o-revenue").textContent = won(revenue);
+
+    const pe = el("o-profit");
+    pe.textContent = (profit >= 0 ? "+" : "−") + won(Math.abs(profit));
+    pe.className = "sim-value " + (profit >= 0 ? "pos" : "neg");
+    el("o-roi").textContent = cost > 0
+      ? `ROI ${(roi * 100).toFixed(0)}% · 비용 ${won(cost)} 대비 매출 ${won(revenue)}`
+      : "비용이 0이면 ROI를 계산할 수 없습니다";
+
+    const be = el("o-breakeven");
+    if (!isFinite(breakeven)) {
+      be.textContent = "계산 불가";
+      be.className = "sim-value";
+      el("o-breakeven-sub").textContent = "구독료와 무료 ARPU가 모두 0이면 매출이 발생하지 않습니다.";
+    } else {
+      be.textContent = pct(breakeven, 1);
+      be.className = "sim-value " + (save >= breakeven ? "pos" : "neg");
+      el("o-breakeven-sub").textContent = save >= breakeven
+        ? `현재 가정한 방어율 ${(save * 100).toFixed(0)}%는 손익분기를 넘습니다.`
+        : `현재 가정한 방어율 ${(save * 100).toFixed(0)}%로는 손해입니다. ${pct(breakeven, 1)} 이상이어야 합니다.`;
+    }
+  }
+
+  // ── wiring ────────────────────────────────────────────────────────
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-toggle]");
+    if (!btn) return;
+    const target = el(btn.dataset.toggle);
+    if (!target) return;
+    const open = target.classList.toggle("is-open");
+    btn.textContent = open ? "차트로 보기" : "표로 보기";
+  });
+
+  el("period-seg").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    el("period-seg").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    periodDays = +b.dataset.days;
+    renderTrend();
+  });
+
+  let rt;
+  window.addEventListener("resize", () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => {
+      charts.forEach((c) => c.draw());
+      const t = el("chart-trend"), a = el("chart-active");
+      if (t._cfg) lineChart(t, t._cfg);
+      if (a._cfg) lineChart(a, a._cfg);
+    }, 150);
+  });
+
+  ["f-tier", "f-type", "f-level", "f-tenure", "f-gender"].forEach((id) =>
+    el(id).addEventListener("change", renderTargets));
+  el("btn-csv").addEventListener("click", exportCsv);
+  ["s-pct", "s-save", "s-cost", "s-fee", "s-months", "s-adarpu"].forEach((id) =>
+    el(id).addEventListener("input", renderSim));
+
+  // ── boot ──────────────────────────────────────────────────────────
+  fetch("data/churn-summary.json")
+    .then((r) => { if (!r.ok) throw new Error("summary " + r.status); return r.json(); })
+    .then((s) => {
+      SUMMARY = s;
+      renderKpis();
+      renderTrend();
+      renderDrivers();
+      renderCohorts();
+      renderSegments();
+
+      const sel = el("f-type");
+      Object.keys(s.risk_types).forEach((k) => {
+        const o = document.createElement("option");
+        o.value = k;
+        o.textContent = s.risk_types[k].label;
+        sel.appendChild(o);
+      });
+
+      return fetch("data/churn-users.json");
+    })
+    .then((r) => { if (!r.ok) throw new Error("users " + r.status); return r.json(); })
+    .then((payload) => {
+      USERS = parseUsers(payload);
+      RETAINED = USERS.filter((u) => u.churn === 0);  // 원본이 이미 위험도 내림차순
+      renderTargets();
+      renderSim();
+    })
+    .catch((err) => {
+      console.error(err);
+      el("target-body").innerHTML =
+        `<tr><td colspan="10" class="loading">데이터를 불러오지 못했습니다 (${esc(err.message)}).<br>
+         로컬에서 열었다면 <code>python3 -m http.server</code> 로 실행해 주세요.</td></tr>`;
+    });
+})();
+</script>
+</body>
+</html>
